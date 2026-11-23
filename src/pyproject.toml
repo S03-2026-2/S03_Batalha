@@ -1,0 +1,16 @@
+[project]
+name = "Batalha_Pokemons"
+version = "0.1.0"
+description = "Sistema de Batalha de pokemons"
+requires-python = ">=3.11"
+dependencies = ["requests"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
