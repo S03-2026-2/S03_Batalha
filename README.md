@@ -40,13 +40,11 @@ A documentação completa do projeto está organizada nas pastas [`docs/`](docs/
 
 | Documento | Conteúdo Principal |
 | :--- | :--- |
-| [**01 – Requisitos e Regras de Negócio**](docs/01-requisitos-e-regras.md) | Escopo, RF01–RF09, RNF01–RNF05, permanência em campo, fórmula ponderada e **RN05** (até 5 rodadas, com fim antecipado por falta de cartas). |
-| [**02 – Casos de Uso**](docs/02-casos-de-uso.md) | Diagrama e especificação `UC01`–`UC08` alinhados às rotas e assinaturas reais. |
-| [**03 – Arquitetura, Diagrama de Classes e SOLID**](docs/03-arquitetura-e-solid.md) | Evolução Entrega 1→2, diagrama de classes **atualizado ao código**, pastas reais e SOLID na prática. |
-| [**04 – Contratos de Integração e Sequência**](docs/04-contratos-de-integracao.md) | Rotas REST, payloads (`callbackUrl`, pontuações, `/api/dica`) e sequências SQ01/SQ02 alinhadas à implementação. |
-| [**05 – Catálogo de Padrões de Projeto**](docs/05-padroes-de-projeto.md) | Handbook Strategy / Facade / Adapter / Decorator / Repository / Composition Root / Fakes, mapa SOLID, trade-offs e roteiro de demo. |
-
-Os documentos `03`–`05` foram **revisados após feedback** para refletir o código atual (método `jogar` unificado, `tipos: list[str]`, Composition Root, contratos reais). Em caso de divergência com o `.drawio` histórico, use o Markdown + o código como fonte da verdade na apresentação.
+| [**01 – Requisitos e Regras de Negócio**](docs/01-requisitos-e-regras.md) | Escopo, RF01–RF09, RNF01–RNF05, permanência em campo, fórmula ponderada e RN05 (até 5 rodadas, com fim antecipado por falta de cartas). |
+| [**02 – Casos de Uso**](docs/02-casos-de-uso.md) | Diagrama e especificação dos casos de uso `UC01`–`UC08`. |
+| [**03 – Arquitetura, Diagrama de Classes e SOLID**](docs/03-arquitetura-e-solid.md) | Evolução Entrega 1→2, diagrama de classes, organização de pastas e aplicação dos princípios SOLID. |
+| [**04 – Contratos de Integração e Sequência**](docs/04-contratos-de-integracao.md) | Rotas REST, payloads JSON e diagramas de sequência com os serviços parceiros. |
+| [**05 – Padrões de Projeto**](docs/05-padroes-de-projeto.md) | Strategy, Facade, Adapter, Decorator, Repository, Composition Root, fakes de teste e mapa SOLID no código. |
 
 ### Arquivos Fontes de Diagramas (`documentation/`)
 - [`documentation/SOLID.drawio`](documentation/SOLID.drawio) — Diagrama de Classes UML com aplicação dos princípios SOLID (Entrega 2).
@@ -58,7 +56,7 @@ Os documentos `03`–`05` foram **revisados após feedback** para refletir o có
 
 ## ⚖️ Síntese das Decisões Arquiteturais (SOLID)
 
-Pastas: `models/` (domínio), `interfaces/` (portas), `services/` (aplicação), `controllers/` (**adapters** HTTP/memória/fake), `composicao.py` (Composition Root), `app.py` + `components/` (apresentação).
+Organização: `models/` (domínio), `interfaces/` (portas), `services/` (aplicação), `controllers/` (adapters HTTP/memória/fake), `composicao.py` (Composition Root), `app.py` + `components/` (API e telas).
 
 - **S — Single Responsibility Principle (SRP):**
   - `ServicoBatalha` orquestra os casos de uso (Facade);
@@ -70,12 +68,12 @@ Pastas: `models/` (domínio), `interfaces/` (portas), `services/` (aplicação),
 - **L — Liskov Substitution Principle (LSP):**
   - `PokeApiProvider` × `ProvedorFake` × `ProvedorPokemonComCache`; nos testes: `GestaoFake`, `MaosFixas`, `GeradorFixo`.
 - **I — Interface Segregation Principle (ISP):**
-  - Entrada: `IniciadorPartida` vs `AcoesJogador` (inclui `jogar` unificado).
+  - Entrada: `IniciadorPartida` vs `AcoesJogador` (método `jogar` unificado).
   - Saída Gestão: `SolicitadorPareamento` vs `NotificadorPartidas`.
 - **D — Dependency Inversion Principle (DIP):**
   - `ServicoBatalha` só recebe interfaces; `src/composicao.py` escolhe as concretas via env.
 
-Catálogo completo para a banca: [`docs/05-padroes-de-projeto.md`](docs/05-padroes-de-projeto.md).
+Detalhamento dos padrões: [`docs/05-padroes-de-projeto.md`](docs/05-padroes-de-projeto.md).
 
 ---
 

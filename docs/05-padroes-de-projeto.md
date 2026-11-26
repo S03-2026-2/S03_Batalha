@@ -1,6 +1,6 @@
-# 05 – Catálogo de Padrões de Projeto (`S03_Batalha`)
+# 05 – Padrões de Projeto (`S03_Batalha`)
 
-Documento no estilo handbook (inspirado na referência didática do professor em *Quantas Xícaras* / `DESIGN_PATTERNS.md`): para cada padrão, **localização → snippet → benefícios → como usar / provar na apresentação**.
+Descreve onde cada padrão de projeto e cada princípio SOLID aparece no código do módulo, com localização, trecho relevante e benefício obtido.
 
 ---
 
@@ -43,13 +43,11 @@ flowchart TB
     COMP -- monta --> SB
 ```
 
-Regra de dependências: `models/` não importa infra; `services/` só conhece `models/` e `interfaces/`; só `composicao.py` instancia concretas de `controllers/`.
-
-> **Nota didática:** no projeto de referência do professor as pastas levam o nome do padrão GoF (`adapters/`, `strategies/`, …). Aqui preferimos **ports & adapters por camada** (`interfaces/` + `controllers/` como adapters), o que deixa DIP/ISP mais explícitos. Os mesmos padrões existem — mudou a organização, não a intenção.
+Regra de dependências: `models/` não importa infra; `services/` só conhece `models/` e `interfaces/`; só `composicao.py` instancia concretas de `controllers/`. A pasta `controllers/` concentra os adapters (HTTP, memória e fakes).
 
 ---
 
-## 2. Catálogo de padrões
+## 2. Padrões aplicados
 
 ### 2.1 Strategy — regras de dano intercambiáveis
 
@@ -73,7 +71,7 @@ class CalculadoraDano:
 
 **Também Strategy:** `ProvedorDicas` (`ClienteDicas` vs `DicaLocal`) e `GeradorAleatorio` (real vs fixo nos testes).
 
-**Prova na demo:** `tests/test_calculadora_dano.py::test_nova_regra_entra_sem_alterar_a_calculadora`.
+**Teste relacionado:** `tests/test_calculadora_dano.py::test_nova_regra_entra_sem_alterar_a_calculadora`.
 
 ---
 
@@ -92,9 +90,7 @@ class CalculadoraDano:
 | `solicitar_dica` | UC06 |
 | `verificar_vencedor` | UC08 |
 
-**Benefícios:** `app.py` e clientes externos não conhecem juiz, repositório ou HTTP parceiro.
-
-**Como usar na apresentação:** abrir `app.py` e mostrar que as rotas só chamam a fachada.
+**Benefícios:** `app.py` e clientes externos não precisam conhecer juiz, repositório ou detalhes HTTP dos parceiros — só a fachada.
 
 ---
 
@@ -130,7 +126,7 @@ fonte = FonteCartasComReserva(ClienteDistribuicao(url, provedor), FonteCartasLoc
 
 **Localização:** `interfaces/repositorio_partidas.py`, `controllers/repositorio_memoria.py`
 
-**Estado atual:** implementação em memória (thread-safe), suficiente para demo e testes.
+**Estado atual:** implementação em memória (thread-safe).
 
 **Benefícios:** trocar por banco no futuro = nova classe na mesma interface; fachada intacta.
 
@@ -182,36 +178,30 @@ Detalhe RN03: dual-type multiplica fatores; imunidades originais tratadas como 0
 
 ---
 
-## 5. Pontos positivos, limitações e próximos passos
+## 5. Estado atual, limitações e próximos passos
 
-*(Seção no espírito da v6 do material de referência do professor.)*
-
-### Pontos positivos
-- Núcleo de combate e API fechados ponta a ponta, com arena HTML demonstrável.
-- Ports & Adapters + Composition Root explícitos — fácil apontar DIP/ISP na banca.
-- Strategy de dano com teste OCP (“clima”) que prova extensão sem modificar a calculadora.
-- Fallbacks conscientes (mão local, dica local, catálogo offline) para demo sem todos os parceiros.
-- Documentação numerada `01`–`05` alinhada ao código após o ciclo de feedback.
+### Estado atual
+- Combate e API operam ponta a ponta, com telas em `components/`.
+- Ports & Adapters com Composition Root em `composicao.py`.
+- Strategy de dano extensível via `ModificadorDano` (coberto por teste de OCP).
+- Fallbacks locais quando Distribuição / Recomendação / PokéAPI não estão configurados (`FonteCartasLocal`, `DicaLocal`, `ProvedorFake`).
 
 ### Limitações
 - Repositório só em memória (partidas somem ao reiniciar o processo).
-- Distribuição e Recomendação só entram no caminho padrão se as env estiverem configuradas.
-- Sem CI/Docker neste repositório; URLs da UI em `components/config.js`.
-- Diagrama `.drawio` histórico pode divergir em detalhes do Markdown atualizado — use este catálogo + código na apresentação.
+- Distribuição e Recomendação só entram no caminho padrão se as variáveis de ambiente estiverem configuradas.
+- Sem CI/Docker neste repositório; URLs da UI ficam em `components/config.js`.
 
-### Próximos passos (fora do escopo atual)
-- Implementação de `RepositorioPartidas` com banco, se a disciplina exigir persistência.
-- Modificadores extras (STAB/clima) só como demonstração OCP adicional.
-- Testes de integração HTTP reais contra os serviços parceiros.
-- CI mínima (`pytest` no push).
+### Próximos passos possíveis
+- Implementação de `RepositorioPartidas` com persistência.
+- Novos modificadores de dano (STAB, clima) via `ModificadorDano`.
+- Testes de integração HTTP contra os serviços parceiros.
+- Pipeline de CI executando `pytest`.
 
 ---
 
-## 6. Roteiro de demonstração
+## 6. Como exercitar o fluxo local
 
 1. `cd src && python app.py` (API em `http://localhost:3001`) e, em outro terminal, `cd src/components && python -m http.server 5371`.
-2. Abrir `http://localhost:5371`. Com o gerenciador (`USE_MOCK_BATALHA=false`): dois jogadores na fila. Sem ele: “Criar a partida direto na batalha”.
-3. Abrir o link do adversário em outra aba; jogar carta + golpe; mostrar faixa de força/chance/sorteio.
-4. Mostrar `composicao.py` (Composition Root) e um adapter em `controllers/`.
-5. Rodar `pytest` e o teste do clima (OCP / Strategy).
-6. Se houver tempo: pedir dica na arena e abrir o contrato em [`04-contratos-de-integracao.md`](04-contratos-de-integracao.md).
+2. Abrir `http://localhost:5371`. Com o gerenciador (`USE_MOCK_BATALHA=false`): dois jogadores entram na fila. Sem ele: usar “Criar a partida direto na batalha”.
+3. Abrir o link do adversário em outra aba e jogar (carta + golpe).
+4. Opcional: `cd src && python -m pytest`.

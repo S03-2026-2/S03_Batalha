@@ -2,7 +2,7 @@
 
 Este documento especifica os contratos HTTP/JSON que conectam o **`S03_Batalha`** aos demais repositórios da organização [`S03-2026-2`](https://github.com/S03-2026-2), bem como os diagramas de sequência de cada operação.
 
-> **Alinhamento pós-feedback:** rotas, payloads e sequências abaixo seguem o código em `src/app.py`, `src/visao_partida.py` e `src/controllers/cliente_*.py`.
+Rotas, payloads e sequências descritos aqui correspondem a `src/app.py`, `src/visao_partida.py` e `src/controllers/cliente_*.py`.
 
 ---
 

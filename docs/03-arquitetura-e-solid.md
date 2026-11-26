@@ -2,7 +2,7 @@
 
 Este documento apresenta a evolução do desenho arquitetural do módulo **Sistema de Batalha (`S03_Batalha`)** e detalha como as propriedades e os princípios de projeto da disciplina **S03 – Arquitetura e Desenho de Software** foram aplicados.
 
-> **Alinhamento pós-feedback:** o diagrama e as assinaturas abaixo refletem o código atual (`jogar` unificado, `tipos: list[str]`, pastas reais e Composition Root em `composicao.py`). O arquivo editável [`documentation/SOLID.drawio`](../documentation/SOLID.drawio) permanece como artefato histórico da Entrega 2; em caso de divergência pontual, **este Markdown + o código** são a fonte da verdade para a apresentação.
+O diagrama e as assinaturas neste documento acompanham a implementação atual (`jogar` unificado, `tipos: list[str]`, Composition Root em `composicao.py`). O arquivo editável [`documentation/SOLID.drawio`](../documentation/SOLID.drawio) registra a visão UML da Entrega 2.
 
 ---
 
@@ -29,7 +29,7 @@ No modelo revisado, a arquitetura foi reestruturada seguindo o padrão **Ports &
 | `src/services/` | Aplicação (`ServicoBatalha`, `JuizRodada`, `CalculadoraDano`, modificadores) |
 | `src/controllers/` | Adaptadores HTTP/memória/fake (na prática: camada *adapters*) |
 | `src/composicao.py` | Composition Root — único lugar que instancia concretas |
-| `src/app.py` | API FastAPI (apresentação HTTP) |
+| `src/app.py` | API FastAPI |
 | `src/components/` | Telas estáticas da arena |
 
 ---
@@ -253,10 +253,10 @@ classDiagram
     RepositorioPartidas <|.. RepositorioPartidasMemoria : realiza
 ```
 
-**Notas de alinhamento com o código:**
+**Observações do modelo atual:**
 - UC04 usa um único método `jogar(...)` (carta + movimento); não há `escolherCarta` / `escolherMovimento` separados.
 - `Pokemon.tipos` é `list[str]` (suporte a dual-type na RN03).
-- O enriquecimento via PokéAPI ocorre nas **fontes de cartas** (adapters), não diretamente no `ServicoBatalha`.
+- O enriquecimento via PokéAPI ocorre nas fontes de cartas (adapters), não diretamente no `ServicoBatalha`.
 - `JuizRodada` concentra o sorteio ponderado (RN04), recebendo `CalculadoraDano` + `GeradorAleatorio`.
 
 ---
