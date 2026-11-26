@@ -2,7 +2,7 @@
 
 Este documento apresenta a evolução do desenho arquitetural do módulo **Sistema de Batalha (`S03_Batalha`)** e detalha como as propriedades e os princípios de projeto da disciplina **S03 – Arquitetura e Desenho de Software** foram aplicados.
 
-O diagrama e as assinaturas neste documento acompanham a implementação atual (`jogar` unificado, `tipos: list[str]`, Composition Root em `composicao.py`). O arquivo editável [`documentation/SOLID.drawio`](../documentation/SOLID.drawio) registra a visão UML da Entrega 2.
+O diagrama de classes abaixo espelha exatamente o arquivo editável [`documentation/SOLID.drawio`](../documentation/SOLID.drawio) (visão UML/SOLID da Entrega 2), acompanhado das notas de mapeamento para a implementação atual em `src/`.
 
 ---
 
@@ -36,7 +36,7 @@ No modelo revisado, a arquitetura foi reestruturada seguindo o padrão **Ports &
 
 ## 2. Diagrama de Classes Consolidado (UML / SOLID)
 
-> Fonte editável histórica: [`documentation/SOLID.drawio`](../documentation/SOLID.drawio). Diagrama abaixo atualizado conforme o código.
+> Fonte editável: [`documentation/SOLID.drawio`](../documentation/SOLID.drawio).
 
 ```mermaid
 classDiagram
@@ -44,41 +44,39 @@ classDiagram
 
     class IniciadorPartida {
         <<interface>>
-        +iniciar_partida(idPartida, idJ1, idJ2, callbackUrl) Partida
+        +iniciarPartida(idPartida, idJ1, idJ2) Partida
     }
 
     class AcoesJogador {
         <<interface>>
-        +solicitar_batalha(idJogador) void
-        +analisar_carta(idPartida, idCarta) Carta
-        +jogar(idPartida, idJogador, idCarta, nomeMovimento) ResultadoRodada
-        +solicitar_dica(idPartida, idJogador) string
-        +partida(idPartida) Partida
+        +solicitarBatalha(idJogador) void
+        +escolherCarta(idPartida, idJogador, idCarta)
+        +analisarCarta(idPartida, idCarta) Pokemon
+        +escolherMovimento(idPartida, idJogador, mov)
+        +solicitarDica(idPartida, idJogador) string
     }
 
     class ServicoBatalha {
+        -pokemons: ProvedorPokemon
         -cartas: FonteCartas
         -dicas: ProvedorDicas
         -pareamento: SolicitadorPareamento
         -notificador: NotificadorPartidas
-        -juiz: JuizRodada
-        -repositorio: RepositorioPartidas
-        +solicitar_batalha(idJogador) void
-        +iniciar_partida(...) Partida
-        +analisar_carta(idPartida, idCarta) Carta
-        +jogar(...) ResultadoRodada
-        +solicitar_dica(idPartida, idJogador) string
-        +verificar_vencedor(partida) void
-    }
-
-    IniciadorPartida <|.. ServicoBatalha : realiza
-    AcoesJogador <|.. ServicoBatalha : realiza
-
-    class JuizRodada {
         -calculadora: CalculadoraDano
+        -repositorio: RepositorioPartidas
         -sorteador: GeradorAleatorio
-        +resolver(jogadaA, jogadaB) ResultadoRodada
+        +solicitarBatalha(idJogador) void
+        +iniciarPartida(idPartida, idJ1, idJ2) Partida
+        +escolherCarta(idPartida, idJogador, idCarta)
+        +analisarCarta(idPartida, idCarta) Pokemon
+        +escolherMovimento(idPartida, idJogador, mov)
+        +solicitarDica(idPartida, idJogador) string
+        +processarRodada(partida, a: Jogada, b: Jogada)
+        +verificarVencedor(idPartida) Jogador
     }
+
+    IniciadorPartida <|.. ServicoBatalha
+    AcoesJogador <|.. ServicoBatalha
 
     class CalculadoraDano {
         -modificadores: ModificadorDano[]
@@ -87,7 +85,7 @@ classDiagram
 
     class ModificadorDano {
         <<interface>>
-        +aplicar(dano, movimento, atacante, defensor) number
+        +aplicar(dano, mov, atacante, defensor) number
     }
 
     class BonusVelocidade {
@@ -98,23 +96,20 @@ classDiagram
         +aplicar(...) number
     }
 
-    ServicoBatalha --> JuizRodada
-    JuizRodada --> CalculadoraDano
-    JuizRodada --> GeradorAleatorio
+    ServicoBatalha *-- CalculadoraDano
     CalculadoraDano o-- "0..*" ModificadorDano
-    ModificadorDano <|.. BonusVelocidade : realiza
-    ModificadorDano <|.. VantagemElemento : realiza
+    ModificadorDano <|.. BonusVelocidade
+    ModificadorDano <|.. VantagemElemento
 
     class Partida {
         -id: string
         -jogadores: Jogador[]
+        -vitorias: Map~string, number~
         -turno: number
-        -status: StatusPartida
-        -callback_url: string
-        +registrar_jogada(...) void
-        +registrar_vitoria(...) void
+        -cartaEmCampo: Map~string, Carta~
+        +registrarVitoria(vencedor, perdedor)
         +terminou() boolean
-        +resultado() Jogador, Jogador
+        +vencedor() Jogador | null
     }
 
     class Jogada {
@@ -125,135 +120,96 @@ classDiagram
 
     class Jogador {
         -id: string
-        -cartas: Carta[]
-        +selecionar_carta(idCarta) Carta
-        +remover_carta(idCarta) void
-        +tem_cartas() boolean
+        -nome: string
+        -mao: Carta[]
     }
 
     class Carta {
         -id: string
         -pokemon: Pokemon
-        +obter_movimento(nome) Movimento
     }
 
     class Pokemon {
-        -id: number
         -nome: string
-        -tipos: list~string~
+        -tipo: string
         -velocidade: number
         -movimentos: Movimento[]
-        -sprite: string
     }
 
     class Movimento {
         -nome: string
         -tipo: string
-        -dano: number
+        -danoBase: number
     }
 
-    ServicoBatalha --> Partida : gerencia
-    Partida --> "2" Jogador : participantes
-    Jogador o-- "0..*" Carta : mao
-    Jogada --> Jogador
+    ServicoBatalha *-- Partida
+    Partida --> "2" Jogador
+    Jogador o-- "0..*" Carta
     Jogada --> Carta
-    Jogada --> Movimento
     Carta --> Pokemon
     Pokemon o-- "1..*" Movimento
 
     class ProvedorPokemon {
         <<interface>>
-        +buscar(nomeOuId) Pokemon
+        +buscar(nomeOuId) Promise~Pokemon~
     }
 
     class PokeApiProvider {
-        +buscar(nomeOuId) Pokemon
+        +buscar(nomeOuId) Promise~Pokemon~
     }
 
     class ProvedorFake {
-        +buscar(nomeOuId) Pokemon
-    }
-
-    class ProvedorPokemonComCache {
-        +buscar(nomeOuId) Pokemon
+        +buscar(nomeOuId) Promise~Pokemon~
     }
 
     class FonteCartas {
         <<interface>>
-        +cartas_do_jogador(idJogador, idPartida) Carta[]
+        +cartasDoJogador(idJogador) Promise~Carta[]~
     }
 
     class ClienteDistribuicao {
-        +cartas_do_jogador(...) Carta[]
-    }
-
-    class FonteCartasLocal {
-        +cartas_do_jogador(...) Carta[]
+        +cartasDoJogador(idJogador)
     }
 
     class SolicitadorPareamento {
         <<interface>>
-        +solicitar_pareamento(idJogador) void
+        +solicitarPareamento(idJogador) Promise~void~
     }
 
     class NotificadorPartidas {
         <<interface>>
-        +notificar_resultado(partida) void
+        +notificarResultado(idPartida, idVencedor, idPerdedor)
     }
 
     class ClienteGestao {
-        +solicitar_pareamento(idJogador) void
-        +notificar_resultado(partida) void
+        +solicitarPareamento(idJogador)
+        +notificarResultado(...)
     }
 
     class ProvedorDicas {
         <<interface>>
-        +gerar_dica(partida, idJogador) string
+        +gerarDica(mao, oponenteEmCampo) Promise~string~
     }
 
     class ClienteDicas {
-        +gerar_dica(partida, idJogador) string
+        +gerarDica(mao, oponenteEmCampo)
     }
 
-    class DicaLocal {
-        +gerar_dica(partida, idJogador) string
-    }
-
-    class RepositorioPartidas {
-        <<interface>>
-        +buscar(id) Partida
-        +salvar(partida) void
-    }
-
-    class RepositorioPartidasMemoria {
-        +buscar(id) Partida
-        +salvar(partida) void
-    }
-
-    class GeradorAleatorio {
-        <<interface>>
-        +proximo() number
-    }
-
+    ServicoBatalha --> ProvedorPokemon
     ServicoBatalha --> FonteCartas
     ServicoBatalha --> SolicitadorPareamento
     ServicoBatalha --> NotificadorPartidas
     ServicoBatalha --> ProvedorDicas
-    ServicoBatalha --> RepositorioPartidas
 
-    ProvedorPokemon <|.. PokeApiProvider : realiza
-    ProvedorPokemon <|.. ProvedorFake : realiza
-    ProvedorPokemon <|.. ProvedorPokemonComCache : realiza
-    FonteCartas <|.. ClienteDistribuicao : realiza
-    FonteCartas <|.. FonteCartasLocal : realiza
-    SolicitadorPareamento <|.. ClienteGestao : realiza
-    NotificadorPartidas <|.. ClienteGestao : realiza
-    ProvedorDicas <|.. ClienteDicas : realiza
-    ProvedorDicas <|.. DicaLocal : realiza
-    RepositorioPartidas <|.. RepositorioPartidasMemoria : realiza
+    ProvedorPokemon <|.. PokeApiProvider
+    ProvedorPokemon <|.. ProvedorFake
+    FonteCartas <|.. ClienteDistribuicao
+    SolicitadorPareamento <|.. ClienteGestao
+    NotificadorPartidas <|.. ClienteGestao
+    ProvedorDicas <|.. ClienteDicas
 ```
 
-**Observações do modelo atual:**
+**Notas sobre refinamentos na implementação atual (`src/`):**
 - UC04 usa um único método `jogar(...)` (carta + movimento); não há `escolherCarta` / `escolherMovimento` separados.
 - `Pokemon.tipos` é `list[str]` (suporte a dual-type na RN03).
 - O enriquecimento via PokéAPI ocorre nas fontes de cartas (adapters), não diretamente no `ServicoBatalha`.
