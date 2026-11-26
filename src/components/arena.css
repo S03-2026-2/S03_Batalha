@@ -1,6 +1,10 @@
 /* Arena: carregado depois de estilo.css */
 body.arena {
   --wb: clamp(4.8rem, min(11vw, 15vh), 9rem); /* largura base de uma carta */
+  --cor-voce: #3a46d8;
+  --cor-voce-fundo: #eef1ff;
+  --cor-adv: #b83b2a;
+  --cor-adv-fundo: #f9ecea;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -26,15 +30,58 @@ body.arena {
   padding: 0.7rem 1.25rem;
   border-bottom: 2px solid var(--tinta);
 }
-.topo .ids { font-weight: 700; overflow-wrap: anywhere; }
+.topo .ids {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.topo .sep-vs { color: var(--apagado); font-weight: 800; }
 .topo .botao { min-height: 2.4rem; padding: 0 1rem; }
 
-/* Mãos */
+.tag-jogador {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 2px solid;
+  border-radius: 99px;
+}
+.tag-voce { color: var(--cor-voce); background: var(--cor-voce-fundo); border-color: var(--cor-voce); }
+.tag-adv { color: var(--cor-adv); background: var(--cor-adv-fundo); border-color: var(--cor-adv); }
+
+/* Zonas e Mãos */
+.zona-mao { display: flex; flex-direction: column; }
+.zona-adv { background: #ecece6; }
+.zona-voce { background: var(--piso); transition: background-color 0.2s ease; }
+.zona-voce.sua-vez { background: #eef1fb; }
+
+.rotulo-zona {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 1rem 0;
+  font-size: 0.9rem;
+}
+.nome-zona { color: var(--apagado); font-weight: 600; }
+.dica-turno {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--apagado);
+}
+.zona-voce.sua-vez .dica-turno { color: var(--cor-voce); }
+
 .mao {
   display: flex;
   justify-content: center;
   gap: clamp(0.4rem, 1.5vw, 1rem);
-  padding: 1.3rem 1rem;
+  padding: 0.75rem 1rem 1.2rem;
 }
 .vaga {
   width: var(--wb);
@@ -84,20 +131,36 @@ body.arena {
 }
 .carta .vel { color: var(--apagado); font-size: 0.85em; }
 
-.mao-voce .carta:hover,
-.mao-voce .carta:focus-visible { transform: translateY(-1rem); box-shadow: 0 0.45rem 0 0 var(--tinta); }
-.mao-adv .carta:hover { transform: translateY(1rem); box-shadow: 0 -0.45rem 0 0 var(--tinta); }
+.mao-voce:not(.travada) .carta:hover,
+.mao-voce:not(.travada) .carta:focus-visible { transform: translateY(-0.85rem); box-shadow: 0 0.45rem 0 0 var(--cor-voce); border-color: var(--cor-voce); }
+.mao-adv .carta { background: #f8f8f5; opacity: 0.9; }
 
 /* Campo */
 .campo {
   display: grid;
   flex: 1;
   grid-template-columns: 1fr auto 1fr;
-  gap: 1rem;
+  gap: 1rem 1.5rem;
   align-items: center;
-  padding: 0.5rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-block: 2px solid var(--tinta);
   background: #e6e9e1;
+}
+.lado-campo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+.rotulo-campo {
+  padding: 0.15rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 2px solid;
+  border-radius: 99px;
+  max-width: calc(var(--wb) * 1.45);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 .slot-campo {
   display: grid;
@@ -111,12 +174,14 @@ body.arena {
   border-radius: 0.7rem;
 }
 .slot-campo:empty::before { content: attr(data-vazio); font-size: 0.9rem; }
-.slot-campo .carta { font-size: max(0.8rem, calc(var(--wb) * 0.14)); cursor: pointer; }
-.slot-adv-campo { justify-self: start; border-color: var(--linha); }
+.slot-campo .carta { font-size: max(0.8rem, calc(var(--wb) * 0.14)); cursor: default; }
+.slot-voce-campo .carta.minha { cursor: pointer; }
+.slot-voce-campo { border-color: var(--cor-voce); background: rgba(58, 70, 216, 0.05); }
+.slot-adv-campo { border-color: var(--cor-adv); background: rgba(184, 59, 42, 0.05); }
 /* Colunas fixas: o campo não "pula" quando o painel de golpes some. */
 .painel { grid-column: 1; grid-row: 1; }
-#slotCarta { grid-column: 2; grid-row: 1; }
-.slot-adv-campo { grid-column: 3; grid-row: 1; }
+.lado-voce { grid-column: 2; grid-row: 1; }
+.lado-adv { grid-column: 3; grid-row: 1; justify-self: start; }
 
 /* Movimentos */
 .painel { display: grid; gap: 0.6rem; justify-self: end; width: min(19rem, 100%); }
@@ -167,7 +232,5 @@ body.arena {
 
 @media (max-width: 44rem) {
   .campo { grid-template-columns: 1fr; justify-items: center; padding-block: 1rem; }
-  .painel, .slot-adv-campo { justify-self: center; }
-  .painel, #slotCarta, .slot-adv-campo { grid-column: auto; grid-row: auto; }
-  .slot-adv-campo { display: none; }
+  .painel, .lado-voce, .lado-adv { justify-self: center; grid-column: auto; grid-row: auto; }
 }

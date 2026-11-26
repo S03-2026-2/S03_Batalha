@@ -15,7 +15,11 @@
     <h1 class="so-leitor">Arena</h1>
 
     <header class="topo">
-      <div class="ids"><span id="idVoce">—</span> × <span id="idAdv">…</span></div>
+      <div class="ids">
+        <span class="tag-jogador tag-voce">Você: <strong id="idVoce">—</strong></span>
+        <span class="sep-vs" aria-hidden="true">×</span>
+        <span class="tag-jogador tag-adv">Adversário: <strong id="idAdv">…</strong></span>
+      </div>
       <div class="marcador">
         <span id="rodada">Rodada —</span>
         <strong id="placar">0 × 0</strong>
@@ -31,7 +35,13 @@
       <p class="msg dica" id="dica" aria-live="polite"></p>
     </div>
 
-    <section class="mao mao-adv" id="maoAdv" aria-label="Cartas do adversário"></section>
+    <section class="zona-mao zona-adv" aria-label="Cartas do adversário">
+      <div class="rotulo-zona">
+        <span class="tag-jogador tag-adv">Adversário</span>
+        <span class="nome-zona" id="rotuloMaoAdv">Cartas do adversário</span>
+      </div>
+      <div class="mao mao-adv" id="maoAdv"></div>
+    </section>
 
     <section class="campo" aria-label="Campo">
       <div class="painel" id="painel" hidden>
@@ -40,11 +50,24 @@
         <p class="msg" id="jogada" role="status" aria-live="polite"></p>
         <button class="secundario" id="devolver" type="button">Devolver à mão</button>
       </div>
-      <div class="slot-campo" id="slotCarta" data-vazio="Clique em uma das suas cartas"></div>
-      <div class="slot-campo slot-adv-campo" id="slotAdv" data-vazio="O adversário ainda não jogou"></div>
+      <div class="lado-campo lado-voce">
+        <span class="rotulo-campo tag-voce" id="rotuloCampoVoce">Sua carta em campo</span>
+        <div class="slot-campo slot-voce-campo" id="slotCarta" data-vazio="Clique em uma das suas cartas"></div>
+      </div>
+      <div class="lado-campo lado-adv">
+        <span class="rotulo-campo tag-adv" id="rotuloCampoAdv">Carta do adversário</span>
+        <div class="slot-campo slot-adv-campo" id="slotAdv" data-vazio="O adversário ainda não jogou"></div>
+      </div>
     </section>
 
-    <section class="mao mao-voce" id="maoVoce" aria-label="Suas cartas"></section>
+    <section class="zona-mao zona-voce" id="zonaVoce" aria-label="Suas cartas">
+      <div class="rotulo-zona">
+        <span class="tag-jogador tag-voce">Você</span>
+        <span class="nome-zona" id="rotuloMaoVoce">Suas cartas</span>
+        <span class="dica-turno" id="dicaTurno"></span>
+      </div>
+      <div class="mao mao-voce" id="maoVoce"></div>
+    </section>
 
     <details class="historico" id="historico" hidden>
       <summary>Rodadas</summary>
@@ -62,6 +85,8 @@
     if (!idPartida || !idJogador) location.replace("index.html");
 
     $("#idVoce").textContent = idJogador;
+    $("#rotuloMaoVoce").textContent = `${idJogador} · suas cartas`;
+    $("#rotuloCampoVoce").textContent = `Sua carta (${idJogador})`;
     $("#nova").href = `index.html?jogador=${encodeURIComponent(idJogador)}`;
 
     const TIPOS = {
@@ -228,6 +253,7 @@
 
       const adv = e.idJogador1 === idJogador ? e.idJogador2 : e.idJogador1;
       $("#idAdv").textContent = adv;
+      $("#rotuloCampoAdv").textContent = `Adversário (${adv})`;
       $("#rodada").textContent = e.terminou ? "Fim" : `Rodada ${e.turno} de 5`;
       $("#placar").textContent = `${e.placar[idJogador] ?? 0} × ${e.placar[adv] ?? 0}`;
 
@@ -247,6 +273,17 @@
       const idSelecionada = escolhida?.c.id;
       escolhida = null;
       $("#painel").hidden = true;
+
+      const qtdAdv = e.adversario.mao.length;
+      const qtdVoce = v.mao.length;
+      $("#rotuloMaoAdv").textContent = `${adv} · ${qtdAdv} ${qtdAdv === 1 ? "carta na mão" : "cartas na mão"}`;
+      $("#rotuloMaoVoce").textContent = `${idJogador} · ${qtdVoce} ${qtdVoce === 1 ? "carta na mão" : "cartas na mão"}`;
+      $("#zonaVoce").classList.toggle("sua-vez", Boolean(e.suaVez && !e.terminou));
+      $("#dicaTurno").textContent = e.terminou
+        ? "Partida encerrada"
+        : e.suaVez
+          ? (v.cartaEmCampo ? "Sua vez — escolha um golpe no campo" : "Sua vez — clique em uma carta")
+          : `Aguardando ${adv}…`;
 
       desenharMao($("#maoAdv"), e.adversario.mao, false);
       desenharMao($("#maoVoce"), v.mao, podeEscolherCarta);
