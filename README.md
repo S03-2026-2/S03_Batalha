@@ -2,7 +2,7 @@
 
 Projeto da disciplina **S03 – Arquitetura e Desenho de Software** (Inatel) — Organização [`S03-2026-2`](https://github.com/S03-2026-2).
 
-O módulo **`S03_Batalha`** é responsável por conduzir o combate entre os Pokémons de dois jogadores pareados pelo módulo de **Gestão de Partidas**. A batalha ocorre ao longo de **5 rodadas**, utilizando **probabilidades ponderadas** calculadas a partir dos movimentos, da vantagem elemental entre tipos de Pokémon e do bônus de velocidade. Os jogadores revezam na ordem de escolha a cada rodada, o **Pokémon vencedor permanece em campo** para a rodada seguinte e vence a partida o jogador que conquistar o maior número de vitórias nas 5 rodadas.
+O módulo **`S03_Batalha`** é responsável por conduzir o combate entre os Pokémons de dois jogadores pareados pelo módulo de **Gestão de Partidas**. A batalha ocorre em **até 5 rodadas** (pode encerrar antes se o perdedor ficar sem cartas), utilizando **probabilidades ponderadas** calculadas a partir dos movimentos, da vantagem elemental entre tipos de Pokémon e do bônus de velocidade. Os jogadores revezam na ordem de escolha a cada rodada, o **Pokémon vencedor permanece em campo** para a rodada seguinte e vence a partida o jogador com o maior número de vitórias de rodada.
 
 ---
 
@@ -40,11 +40,11 @@ A documentação completa do projeto está organizada nas pastas [`docs/`](docs/
 
 | Documento | Conteúdo Principal |
 | :--- | :--- |
-| [**01 – Requisitos e Regras de Negócio**](docs/01-requisitos-e-regras.md) | Escopo do módulo, Requisitos Funcionais (RF01–RF09), Requisitos Não Funcionais (RNF01–RNF05), regra de permanência do Pokémon vencedor em campo e fórmula matemática da probabilidade ponderada por rodada. |
-| [**02 – Casos de Uso**](docs/02-casos-de-uso.md) | Diagrama de Casos de Uso atualizado e especificação detalhada de fluxos principais, alternativos e de exceção (`UC01` a `UC08`). |
-| [**03 – Arquitetura, Diagrama de Classes e SOLID**](docs/03-arquitetura-e-solid.md) | Evolução da Entrega 1 para a Entrega 2, Diagrama de Classes completo e justificativa prática de **SRP**, **OCP**, **LSP**, **ISP**, **DIP**, **Lei de Demeter** e **Ocultamento de Informação**. |
-| [**04 – Contratos de Integração e Sequência**](docs/04-contratos-de-integracao.md) | Especificação das rotas REST, payloads JSON trocados com `gerenciador-de-partidas`, `Distribuicao_de_Cartas`, `Recomendacao-de-cartas` e `PokéAPI`, além dos Diagramas de Sequência. |
-| [**05 – Padrões de Projeto no Código**](docs/05-padroes-de-projeto.md) | Onde cada padrão (Strategy, Facade, Adapter, Decorator, Repository, Injeção de Dependência) e cada princípio SOLID aparece no código, com o teste que prova cada regra de negócio e o roteiro de demonstração. |
+| [**01 – Requisitos e Regras de Negócio**](docs/01-requisitos-e-regras.md) | Escopo, RF01–RF09, RNF01–RNF05, permanência em campo, fórmula ponderada e RN05 (até 5 rodadas, com fim antecipado por falta de cartas). |
+| [**02 – Casos de Uso**](docs/02-casos-de-uso.md) | Diagrama e especificação dos casos de uso `UC01`–`UC08`. |
+| [**03 – Arquitetura, Diagrama de Classes e SOLID**](docs/03-arquitetura-e-solid.md) | Evolução Entrega 1→2, diagrama de classes, organização de pastas e aplicação dos princípios SOLID. |
+| [**04 – Contratos de Integração e Sequência**](docs/04-contratos-de-integracao.md) | Rotas REST, payloads JSON e diagramas de sequência com os serviços parceiros. |
+| [**05 – Padrões de Projeto**](docs/05-padroes-de-projeto.md) | Strategy, Facade, Adapter, Decorator, Repository, Composition Root, fakes de teste e mapa SOLID no código. |
 
 ### Arquivos Fontes de Diagramas (`documentation/`)
 - [`documentation/SOLID.drawio`](documentation/SOLID.drawio) — Diagrama de Classes UML com aplicação dos princípios SOLID (Entrega 2).
@@ -56,20 +56,24 @@ A documentação completa do projeto está organizada nas pastas [`docs/`](docs/
 
 ## ⚖️ Síntese das Decisões Arquiteturais (SOLID)
 
+Organização: `models/` (domínio), `interfaces/` (portas), `services/` (aplicação), `controllers/` (adapters HTTP/memória/fake), `composicao.py` (Composition Root), `app.py` + `components/` (API e telas).
+
 - **S — Single Responsibility Principle (SRP):**
-  - `ServicoBatalha` orquestra o fluxo de aplicação;
-  - `Partida` gerencia exclusivamente o estado das 5 rodadas, o placar e qual Pokémon vencedor permanece ativo em campo;
-  - `CalculadoraDano` calcula a força de combate a partir dos modificadores;
-  - `PokeApiProvider`, `ClienteDistribuicao`, `ClienteGestao` e `ClienteDicas` isolam a comunicação externa.
+  - `ServicoBatalha` orquestra os casos de uso (Facade);
+  - `Partida` guarda estado (turno, placar, campo, término até 5 rodadas ou por falta de cartas);
+  - `JuizRodada` + `CalculadoraDano` separam sorteio e força;
+  - adapters em `controllers/` isolam cada serviço externo.
 - **O — Open/Closed Principle (OCP):**
-  - Novas regras de combate (ex.: `VantagemElemento`, `BonusVelocidade`, ou futuros modificadores de clima/STAB) implementam a interface `ModificadorDano` e são injetadas em `CalculadoraDano` sem necessidade de alterar o código existente.
+  - `VantagemElemento`, `BonusVelocidade` (e futuros clima/STAB) implementam `ModificadorDano` sem alterar a calculadora.
 - **L — Liskov Substitution Principle (LSP):**
-  - `PokeApiProvider`, `ProvedorFake` e `ProvedorPokemonComCache` implementam o mesmo contrato (`ProvedorPokemon`) e podem substituir um ao outro sem quebrar o `ServicoBatalha`. O mesmo vale para `GestaoFake`, `MaosFixas` e `GeradorFixo` nos testes.
+  - `PokeApiProvider` × `ProvedorFake` × `ProvedorPokemonComCache`; nos testes: `GestaoFake`, `MaosFixas`, `GeradorFixo`.
 - **I — Interface Segregation Principle (ISP):**
-  - As portas de entrada foram separadas em `IniciadorPartida` (usada pela Gestão de Partidas) e `AcoesJogador` (usada pelos jogadores).
-  - A integração com Gestão de Partidas foi dividida em duas interfaces menores e focadas: `SolicitadorPareamento` e `NotificadorPartidas`.
+  - Entrada: `IniciadorPartida` vs `AcoesJogador` (método `jogar` unificado).
+  - Saída Gestão: `SolicitadorPareamento` vs `NotificadorPartidas`.
 - **D — Dependency Inversion Principle (DIP):**
-  - `ServicoBatalha` depende apenas de interfaces (`FonteCartas`, `ProvedorDicas`, `SolicitadorPareamento`, `NotificadorPartidas`, `RepositorioPartidas`, e do `JuizRodada`, que por sua vez recebe `GeradorAleatorio`), recebendo as implementações concretas no construtor. Quem monta tudo é o `src/composicao.py`.
+  - `ServicoBatalha` só recebe interfaces; `src/composicao.py` escolhe as concretas via env.
+
+Detalhamento dos padrões: [`docs/05-padroes-de-projeto.md`](docs/05-padroes-de-projeto.md).
 
 ---
 
@@ -81,9 +85,12 @@ Requisitos: Python 3.11+.
 
 ```bash
 cd src
-pip install fastapi uvicorn requests pydantic pytest httpx
+pip install -r requirements.txt
+# opcional para testes: pip install -r requirements-dev.txt
 python app.py
 ```
+
+Há um [`.env.example`](.env.example) na raiz com as variáveis opcionais.
 
 **2. Telas (porta 5371)**, em outro terminal:
 
