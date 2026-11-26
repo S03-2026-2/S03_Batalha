@@ -155,9 +155,11 @@ flowchart LR
 | **Pós-Condições** | Os detalhes do `Pokemon` são exibidos ao jogador sem avançar o turno. |
 
 **Fluxo Principal:**
-1. Durante a escolha de carta (UC04), o Jogador solicita analisar uma carta específica.
-2. O Sistema aciona `ProvedorPokemon.buscar(nomePokemon)` para obter/confirmar os dados da PokéAPI.
-3. O Sistema retorna o nome, tipo elemental, velocidade e lista de movimentos com seus respectivos tipos e danos base.
+1. Durante a escolha de carta (UC04), o Jogador solicita analisar uma carta específica (`GET /batalhas/{idPartida}/cartas/{idCarta}`).
+2. O Sistema localiza a carta na mão ou em campo dos jogadores da partida (os atributos já foram enriquecidos na preparação via `ProvedorPokemon` / PokéAPI).
+3. O Sistema retorna o nome, tipos elementais, velocidade, sprite e lista de movimentos com seus respectivos tipos e danos base, sem avançar o turno.
+
+**Observação de implementação:** na arena HTML os atributos já aparecem embutidos no estado da mão; o endpoint de análise permanece disponível para consulta explícita (UC05) e para outros clientes.
 
 ---
 
@@ -172,10 +174,11 @@ flowchart LR
 | **Pós-Condições** | O jogador recebe uma recomendação textual/estruturada para auxiliar sua decisão. |
 
 **Fluxo Principal:**
-1. Durante a escolha de jogada (UC04), o Jogador aciona a opção de solicitar dica.
-2. O Sistema reúne as cartas atuais da mão do Jogador e o Pokémon em campo do adversário (caso visível após ter permanecido da rodada anterior).
-3. O Sistema chama `ProvedorDicas.gerarDica(maoJogador, cartaOponenteEmCampo)`.
-4. O Sistema exibe a recomendação retornada pelo serviço `Recomendacao-de-cartas`.
+1. Durante a escolha de jogada (UC04), o Jogador aciona a opção de solicitar dica (`POST /batalhas/{idPartida}/dica`).
+2. O Sistema valida que o jogador pertence à partida e que ela está `EM_ANDAMENTO`.
+3. O Sistema chama `ProvedorDicas.gerar_dica(partida, idJogador)` — a implementação concreta monta o contexto (mão, campo e oponente).
+4. Com token configurado, o `ClienteDicas` consulta `POST /api/dica` no serviço `Recomendacao-de-cartas`; sem token ou em falha, usa a estratégia reserva `DicaLocal`.
+5. O Sistema exibe a recomendação textual ao jogador.
 
 ---
 
@@ -187,7 +190,7 @@ flowchart LR
 | **Atores Secundários** | Nenhum |
 | **Resumo** | Calcula a força das duas jogadas aplicando os modificadores de dano, realiza o sorteio probabilístico ponderado, mantém o Pokémon vencedor em campo, elimina a carta perdedora e avança o turno. |
 | **Pré-Condições** | Ambos os jogadores registraram suas jogadas na rodada atual. |
-| **Pós-Condições** | 1. O placar da rodada é contabilizado.<br/>2. A carta vencedora é mantida em `cartaEmCampo`.<br/>3. A carta perdedora é removida da mão do jogador derrotado.<br/>4. Se a 5ª rodada foi concluída, estende para **UC08 – Verificar Vencedor e Notificar Resultado**. |
+| **Pós-Condições** | 1. O placar da rodada é contabilizado.<br/>2. A carta vencedora é mantida em `cartaEmCampo`.<br/>3. A carta perdedora é removida da mão do jogador derrotado.<br/>4. Se a 5ª rodada foi concluída **ou** o perdedor ficou sem cartas, estende para **UC08 – Verificar Vencedor e Notificar Resultado**. |
 
 **Fluxo Principal:**
 1. O Sistema aciona `CalculadoraDano.calcular(movimentoJ1, pokemonJ1, pokemonJ2)` para obter a força $S_1$, aplicando `VantagemElemento` e `BonusVelocidade`.
@@ -196,7 +199,7 @@ flowchart LR
 4. O Sistema obtém um número aleatório $r \in [0, 1)$ através de `GeradorAleatorio.proximo()` e define o vencedor e o perdedor da rodada.
 5. O Sistema registra a vitória da rodada em `Partida`, mantém a carta do vencedor em `cartaEmCampo` e remove a carta derrotada da mão do perdedor.
 6. O Sistema incrementa o contador de rodadas (`turno`).
-7. Se as 5 rodadas foram concluídas (`Partida.terminou() == true`), o Sistema executa **UC08 – Verificar Vencedor e Notificar Resultado**.
+7. Se `Partida.terminou() == true` (5 rodadas concluídas ou perdedor sem cartas), o Sistema executa **UC08 – Verificar Vencedor e Notificar Resultado**.
 
 ---
 
@@ -204,14 +207,16 @@ flowchart LR
 | Campo | Descrição |
 | :--- | :--- |
 | **Caso de Uso Geral** | Batalha |
-| **Ator Principal** | Nenhum (estendido por UC07 ao final da 5ª rodada) |
+| **Ator Principal** | Nenhum (estendido por UC07 ao encerrar a partida) |
 | **Atores Secundários** | Gestão de Partidas (`NotificadorPartidas`) |
-| **Resumo** | Apura o vencedor geral das 5 rodadas e envia o resultado final para o módulo de Gestão de Partidas. |
-| **Pré-Condições** | As 5 rodadas da batalha foram processadas (`Partida.terminou() == true`). |
-| **Pós-Condições** | O resultado final é enviado ao serviço Gestão de Partidas (`POST /partidas/:id/resultado`). |
+| **Resumo** | Apura o vencedor geral (maior número de vitórias de rodada) e envia o resultado final para o módulo de Gestão de Partidas. |
+| **Pré-Condições** | A partida terminou (`Partida.terminou() == true`), seja após 5 rodadas ou por falta de cartas. |
+| **Pós-Condições** | O resultado final é enviado ao serviço Gestão de Partidas (`callbackUrl` ou `POST /partidas/:id/resultado`). |
 
 **Fluxo Principal:**
-1. O Sistema consulta `Partida.vencedor()` e `Partida.perdedor()`, comparando o número de vitórias acumuladas nas 5 rodadas.
+1. O Sistema consulta `Partida.resultado()`, comparando o número de vitórias acumuladas nas rodadas disputadas.
 2. O Sistema monta o resumo detalhado do placar (ex.: `"Placar 3x2 em 5 rodadas"`).
-3. O Sistema invoca `NotificadorPartidas.notificarResultado(idPartida, idVencedor, idPerdedor, detalhes)`.
+3. O Sistema invoca `NotificadorPartidas.notificar_resultado(partida)` com payload contendo `idPartida`, `idVencedor`, `idPerdedor`, `pontuacaoJogador1`, `pontuacaoJogador2` e `detalhes`.
 4. O módulo Gestão de Partidas recebe a notificação, persiste o histórico da partida e atualiza a pontuação do vencedor.
+
+**Observação de integração na UI:** a tela inicial costuma falar direto com a Gestão (`POST /partidas/fila`) para entrar na fila; o endpoint `POST /batalhas/solicitar` (UC01 via fachada da Batalha) permanece disponível para outros clientes.

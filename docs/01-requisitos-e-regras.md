@@ -37,7 +37,7 @@ Este documento descreve o escopo, os requisitos funcionais e não funcionais e a
 | **RF06** | Calcular Força com Modificadores | O sistema deve calcular a pontuação de combate de cada jogada a partir do `danoBase` do movimento escolhido, aplicando modificadores extensíveis como **Vantagem de Elemento (Tipo)** e **Bônus de Velocidade**. |
 | **RF07** | Resolver Rodada por Probabilidade | O sistema deve determinar o vencedor de cada rodada por sorteio probabilístico ponderado pelas forças calculadas dos dois Pokémons em combate. |
 | **RF08** | Manter Pokémon Vencedor em Campo | Ao término de uma rodada, o Pokémon vencedor deve permanecer ativo em campo para a rodada seguinte, enquanto a carta do Pokémon perdedor deve ser removida da mão/campo do jogador derrotado. |
-| **RF09** | Verificar Vencedor e Notificar Resultado | Ao concluir as 5 rodadas, o sistema deve apurar o jogador com maior número de vitórias nas rodadas e enviar o resultado (`idVencedor`, `idPerdedor`, `detalhes`) para a Gestão de Partidas. |
+| **RF09** | Verificar Vencedor e Notificar Resultado | Ao encerrar a partida (5 rodadas ou fim antecipado por falta de cartas), o sistema deve apurar o jogador com maior número de vitórias nas rodadas e enviar o resultado (`idPartida`, `idVencedor`, `idPerdedor`, pontuações e `detalhes`) para a Gestão de Partidas. |
 
 ---
 
@@ -73,10 +73,10 @@ stateDiagram-v2
     [*] --> Rodada1: Recebe 5+ cartas por jogador
     Rodada1 --> ProcessandoRodada: J1 e J2 escolhem Carta + Movimento
     ProcessandoRodada --> AtualizandoCampo: Calcula forças S1 e S2 e sorteia vencedor
-    AtualizandoCampo --> ProximaRodada: Turno < 5 (Vencedor mantém Pokémon em campo; Perdedor descarta carta)
+    AtualizandoCampo --> ProximaRodada: Turno < 5 e perdedor ainda tem cartas
     ProximaRodada --> ProcessandoRodada: Perdedor escolhe nova Carta + Movimento; Vencedor escolhe Movimento
-    AtualizandoCampo --> PartidaFinalizada: Turno == 5 (5 rodadas concluídas)
-    PartidaFinalizada --> [*]: Notifica Gestão de Partidas (Maior nº de vitórias em 5 rodadas)
+    AtualizandoCampo --> PartidaFinalizada: Turno == 5 OU perdedor sem cartas
+    PartidaFinalizada --> [*]: Notifica Gestão de Partidas (maior nº de vitórias de rodada)
 ```
 
 ### RN03 – Cálculo de Força (`CalculadoraDano` + `ModificadorDano`)
@@ -109,5 +109,8 @@ $$P(\text{Vitória } J_1) = \frac{S_1}{S_1 + S_2}, \qquad P(\text{Vitória } J_2
   - Se $r \ge P(J_1)$, o **Jogador 2** vence a rodada.
 
 ### RN05 – Apuração do Vencedor da Partida
-- Como são disputadas **5 rodadas** (número ímpar) e toda rodada possui exatamente 1 vencedor, ao final das 5 rodadas não há empate (placar possível: `5x0`, `4x1` ou `3x2`).
-- Vence a batalha o jogador que acumular o maior número de rodadas vencidas entre as 5 rodadas.
+- A partida é projetada para **até 5 rodadas**. Cada rodada tem exatamente 1 vencedor.
+- A partida **encerra ao concluir a 5ª rodada** ou **antes**, se o perdedor de uma rodada ficar sem cartas na mão (não há como continuar o combate).
+- Vence a batalha o jogador que acumular o **maior número de vitórias de rodada**.
+- Quando as 5 rodadas são concluídas normalmente, o placar é sempre decisivo (`5x0`, `4x1` ou `3x2`) — não há empate.
+- Se a partida terminar antecipadamente por falta de cartas e o placar estiver empatado, vence o jogador que ainda possui cartas restantes (regra de desempate do domínio).
