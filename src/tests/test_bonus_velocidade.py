@@ -1,6 +1,6 @@
 import pytest
-from infraestrutura.poke_api_provider import PokeApiProvider
-from servicos.bonus_velocidade import BonusVelocidade
+from controllers.poke_api_provider import PokeApiProvider
+from services.bonus_velocidade import BonusVelocidade
 api_provider = PokeApiProvider()
 
 def criar_dados(id1):

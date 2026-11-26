@@ -1,6 +1,6 @@
 import pytest
-from infraestrutura.poke_api_provider import PokeApiProvider
-from servicos.calculadora_dano import CalculadoraDano
+from controllers.poke_api_provider import PokeApiProvider
+from services.calculadora_dano import CalculadoraDano
 api_provider = PokeApiProvider()
 
 def criar_dados(id1, id2):

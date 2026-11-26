@@ -1,5 +1,5 @@
-from modelos.movimento import Movimento
-from modelos.pokemon import Pokemon
+from models.movimento import Movimento
+from models.pokemon import Pokemon
 from interfaces.provedor_pokemon import ProvedorPokemon
 import requests
 
@@ -47,7 +47,6 @@ class PokeApiProvider(ProvedorPokemon):
 
     def _selecionar_moves(self, moves_raw: list[dict]) -> list[Movimento]:
         candidatos: list[dict] = []
-        print(moves_raw)
         for entrada in moves_raw[:25]:
             url_golpe = entrada["move"]["url"]
 

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Buscar batalha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <main>
+    <h1>Buscar batalha</h1>
+    <p class="intro">Informe seu ID de jogador. O gerenciador procura um adversário e leva você para a arena assim que a partida for criada.</p>
+
+    <form id="form">
+      <label for="idJogador">Seu ID de jogador</label>
+      <div class="campo">
+        <input id="idJogador" name="idJogador" autocomplete="off" required>
+        <button id="buscar" type="submit">Buscar adversário</button>
+      </div>
+    </form>
+
+    <section class="versus" aria-label="Pareamento">
+      <div class="slot">
+        <span class="rotulo">Você</span>
+        <strong id="idVoce">—</strong>
+      </div>
+      <div class="x" aria-hidden="true">×</div>
+      <div class="slot slot-adv vazio" id="slotAdv">
+        <span class="rotulo">Adversário</span>
+        <strong id="idAdv">—</strong>
+      </div>
+    </section>
+
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+    <p id="nota" class="nota" hidden>Você continua na fila até alguém entrar. O gerenciador ainda não tem uma rota para sair dela.</p>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const $ = (seletor) => document.querySelector(seletor);
+    const form = $("#form");
+    const entrada = $("#idJogador");
+    const botao = $("#buscar");
+    const msg = $("#msg");
+
+    // sessionStorage é por aba: duas abas podem ser dois jogadores diferentes.
+    entrada.value =
+      new URLSearchParams(location.search).get("jogador") ||
+      sessionStorage.getItem("jogador") ||
+      "";
+
+    function mostrar(texto, tipo) {
+      msg.textContent = texto;
+      msg.className = tipo === "erro" ? "msg erro" : "msg";
+    }
+
+    function estadoAdversario(estado, id) {
+      $("#slotAdv").className = `slot slot-adv ${estado}`;
+      $("#idAdv").textContent = id ?? (estado === "procurando" ? "Procurando…" : "—");
+    }
+
+    function travar(travado) {
+      botao.disabled = travado;
+      entrada.disabled = travado;
+    }
+
+    // Entra na fila. Quem completa o par recebe a partida na hora (201);
+    // quem chegou primeiro recebe 202 e precisa consultar até a partida aparecer.
+    async function buscarPartida(idJogador) {
+      const conhecidas = new Set((await historico(idJogador)).map((p) => p.id));
+
+      const r = await chamarGestao("/partidas/fila", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idJogador }),
+      });
+
+      if (r.status === 201) return r.corpo;
+
+      if (r.status !== 202) {
+        // Já existe uma partida em andamento para esse jogador: volta para ela.
+        if (/ja esta em uma partida/i.test(r.corpo?.erro || "")) {
+          const ativa = (await historico(idJogador)).find((p) => p.status !== "FINALIZADA");
+          if (ativa) return ativa;
+        }
+        throw new Error(r.corpo?.erro || "O gerenciador recusou o pedido.");
+      }
+
+      $("#nota").hidden = false;
+      const inicio = Date.now();
+      while (true) {
+        const segundos = Math.round((Date.now() - inicio) / 1000);
+        mostrar(`Na fila há ${segundos} s, aguardando outro jogador…`);
+        await esperar(INTERVALO_MS);
+        try {
+          const nova = (await historico(idJogador)).find((p) => !conhecidas.has(p.id));
+          if (nova) return nova;
+        } catch {
+          mostrar("Reconectando ao gerenciador…");
+        }
+      }
+    }
+
+    form.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const idJogador = entrada.value.trim();
+      if (!idJogador) {
+        mostrar("Informe seu ID de jogador.", "erro");
+        entrada.focus();
+        return;
+      }
+
+      sessionStorage.setItem("jogador", idJogador);
+      $("#idVoce").textContent = idJogador;
+      estadoAdversario("procurando");
+      mostrar("Entrando na fila…");
+      travar(true);
+
+      try {
+        const partida = await buscarPartida(idJogador);
+        estadoAdversario("achou", adversarioDe(partida, idJogador));
+        $("#nota").hidden = true;
+        mostrar("Adversário encontrado. Indo para a arena…");
+        setTimeout(() => { location.href = urlDaArena(partida.id, idJogador); }, 1200);
+      } catch (erro) {
+        estadoAdversario("vazio");
+        $("#nota").hidden = true;
+        mostrar(erro.message, "erro");
+        travar(false);
+      }
+    });
+  </script>
+</body>
+</html>

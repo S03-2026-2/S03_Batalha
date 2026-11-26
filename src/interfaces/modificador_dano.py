@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from modelos.movimento import Movimento
+from models.movimento import Movimento
 
 
 class ModificadorDano(ABC):

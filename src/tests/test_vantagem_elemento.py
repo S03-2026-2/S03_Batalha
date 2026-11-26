@@ -1,6 +1,6 @@
 import pytest
-from infraestrutura.poke_api_provider import PokeApiProvider
-from servicos.vantagem_elemento import VantagemElemento
+from controllers.poke_api_provider import PokeApiProvider
+from services.vantagem_elemento import VantagemElemento
 api_provider = PokeApiProvider()
 
 def criar_dados(id1, id2):

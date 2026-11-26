@@ -1,6 +1,6 @@
-from modelos.movimento import Movimento
+from models.movimento import Movimento
 from interfaces.modificador_dano import ModificadorDano
-from modelos.pokemon import Pokemon
+from models.pokemon import Pokemon
 
 
 class BonusVelocidade(ModificadorDano):

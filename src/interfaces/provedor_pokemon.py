@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from modelos.pokemon import Pokemon
+from models.pokemon import Pokemon
 
 
 class ProvedorPokemon(ABC):

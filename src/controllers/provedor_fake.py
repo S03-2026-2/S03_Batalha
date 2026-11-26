@@ -1,4 +1,4 @@
-from modelos.pokemon import Pokemon
+from models.pokemon import Pokemon
 from interfaces.provedor_pokemon import ProvedorPokemon
 
 

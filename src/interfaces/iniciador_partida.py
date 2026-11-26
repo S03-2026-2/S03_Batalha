@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from modelos.jogador import Jogador
+from models.jogador import Jogador
 
 
 class IniciadorPartida(ABC):

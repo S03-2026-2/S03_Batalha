@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 
-from modelos.jogador import Jogador
+from models.partida import Partida
 
 
 class NotificadorPartidas(ABC):
     @abstractmethod
-    def notificar_resultado(self, vencedor: Jogador, perdedor: Jogador) -> None:
+    def notificar_resultado(self, partida: Partida) -> None:
         pass

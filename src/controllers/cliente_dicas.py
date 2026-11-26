@@ -1,4 +1,4 @@
-from modelos.carta import Carta
+from models.carta import Carta
 from interfaces.provedor_dicas import ProvedorDicas
 
 

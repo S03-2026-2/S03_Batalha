@@ -1,4 +1,4 @@
-from modelos.movimento import Movimento
+from models.movimento import Movimento
 
 class Pokemon:
 

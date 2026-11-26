@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from modelos.carta import Carta
+from models.carta import Carta
 
 
 class ProvedorDicas(ABC):

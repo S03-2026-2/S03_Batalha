@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from infraestrutura.poke_api_provider import PokeApiProvider
+from controllers.poke_api_provider import PokeApiProvider
 
 def test_poke_api_provider_buscar():
     api_provider = PokeApiProvider()

@@ -1,0 +1,120 @@
+:root {
+  --piso: #f2f3ee;
+  --tinta: #1b2132;
+  --apagado: #5b6275;
+  --linha: #c3c7d2;
+  --acao: #3a46d8;
+  --acao-escura: #2b35b0;
+  --espera: #ffd23f;
+  --achou: #2ec4b6;
+  --erro: #b3261e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--piso);
+  color: var(--tinta);
+  font: 400 1.0625rem/1.55 "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 6vw, 4rem) 1.25rem 4rem;
+}
+
+h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2.1rem, 7vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+
+.intro { margin: 0 0 2rem; max-width: 34rem; color: var(--apagado); }
+
+form { display: grid; gap: 0.5rem; margin-bottom: 2rem; }
+label { font-weight: 600; }
+.campo { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+input {
+  flex: 1 1 12rem;
+  min-height: 3rem;
+  padding: 0 0.9rem;
+  font: inherit;
+  color: var(--tinta);
+  background: #fff;
+  border: 2px solid var(--tinta);
+  border-radius: 0.5rem;
+}
+
+button,
+.botao {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0 1.4rem;
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+  background: var(--acao);
+  border: 2px solid var(--acao);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:hover,
+.botao:hover { background: var(--acao-escura); border-color: var(--acao-escura); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+:focus-visible { outline: 3px solid var(--tinta); outline-offset: 3px; }
+
+/* Faixa "você × adversário": é o centro das duas telas. */
+.versus {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+.slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 6.5rem;
+  padding: 1rem 1.1rem;
+  background: #fff;
+  border: 2px solid var(--tinta);
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.slot .rotulo { color: var(--apagado); font-size: 0.9rem; }
+.slot strong { font-size: 1.5rem; line-height: 1.15; letter-spacing: -0.01em; }
+.x { align-self: center; font-size: 2rem; font-weight: 800; color: var(--apagado); }
+
+.slot-adv.vazio { background: transparent; border-style: dashed; border-color: var(--linha); }
+.slot-adv.vazio strong { color: var(--linha); }
+.slot-adv.procurando {
+  background: var(--espera);
+  border-style: dashed;
+  animation: pulsa 1.4s ease-in-out infinite;
+}
+.slot-adv.achou { background: var(--achou); }
+@keyframes pulsa { 50% { background: #fff0a8; } }
+@media (prefers-reduced-motion: reduce) { .slot-adv.procurando { animation: none; } }
+
+.msg { min-height: 1.6em; margin: 0; }
+.msg.erro { color: var(--erro); font-weight: 600; }
+.nota { margin: 0.5rem 0 0; color: var(--apagado); font-size: 0.95rem; }
+
+/* Arena */
+.arena { margin-top: 2rem; padding-top: 1.25rem; border-top: 2px solid var(--tinta); }
+.arena h2 { margin: 0 0 0.5rem; font-size: 1.6rem; letter-spacing: -0.02em; }
+.placar { margin: 0.25rem 0 0.75rem; font-size: 2.4rem; font-weight: 800; letter-spacing: -0.02em; }
+.arena code { font-size: 0.9rem; color: var(--apagado); overflow-wrap: anywhere; }
+.arena .botao { margin-top: 1rem; }
+
+@media (max-width: 30rem) {
+  .versus { grid-template-columns: 1fr; }
+  .x { justify-self: center; }
+}

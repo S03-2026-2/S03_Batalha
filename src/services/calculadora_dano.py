@@ -1,7 +1,7 @@
-from modelos.movimento import Movimento
-from modelos.pokemon import Pokemon
-from servicos.vantagem_elemento import VantagemElemento
-from servicos.bonus_velocidade import BonusVelocidade
+from models.movimento import Movimento
+from models.pokemon import Pokemon
+from services.vantagem_elemento import VantagemElemento
+from services.bonus_velocidade import BonusVelocidade
 
 class CalculadoraDano:
 
