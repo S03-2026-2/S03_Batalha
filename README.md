@@ -77,72 +77,297 @@ Detalhamento dos padrões: [`docs/05-padroes-de-projeto.md`](docs/05-padroes-de-
 
 ---
 
-## ▶️ Como rodar
+## ✅ Pré-requisitos
 
-Requisitos: Python 3.11+.
+- **Python 3.11+** e **pip** (em distribuições Linux/Ubuntu/Debian, também é recomendado ter o pacote `python3-venv` instalado para criar ambientes virtuais)
+- **Para o fluxo completo integrado com fila e histórico (`gerenciador-de-partidas`):**
+  - **Node.js v18+** e **npm**
+  - **Docker** e **Docker Compose** (para o banco de dados PostgreSQL local)
 
-**1. Batalha (backend, porta 3001)**
+---
 
+## ▶️ Passo a Passo de Instalação e Execução
+
+### 1. Criar e ativar o ambiente virtual (recomendado)
+
+Na raiz do repositório `S03_Batalha`, crie e ative um ambiente virtual para isolar as dependências do projeto (e evitar o erro `externally-managed-environment` em sistemas Linux recentes):
+
+**Linux / macOS:**
 ```bash
-cd src
-pip install -r requirements.txt
-# opcional para testes: pip install -r requirements-dev.txt
-python app.py
+# Caso esteja no Ubuntu/Debian e o módulo venv ainda não esteja instalado:
+# sudo apt install python3-venv
+
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-Há um [`.env.example`](.env.example) na raiz com as variáveis opcionais.
-
-**2. Telas (porta 5371)**, em outro terminal:
-
-```bash
-cd src/components
-python -m http.server 5371
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-Abra `http://localhost:5371`.
+### 2. Instalar dependências
 
-**3. Gestão de Partidas (porta 3000)**, para o fluxo completo com fila:
+Com o ambiente virtual ativo, instale as dependências de execução:
 
 ```bash
-# no repositório gerenciador-de-partidas
-docker-compose up -d                    # PostgreSQL
-npm install
-npx prisma migrate dev --name init
-npm run dev
+pip install -r src/requirements.txt
 ```
 
-No `.env` do gerenciador, `USE_MOCK_BATALHA` precisa ser `false`. Com `true` (o padrão do `.env.example`) o gerenciador simula a batalha sozinho, nunca chama este serviço e a arena fica esperando. Os outros valores do `.env.example` já apontam para cá (`BATALHA_API_URL=http://localhost:3001` e `CALLBACK_RESULTADO_URL=http://localhost:3000/partidas/resultado`).
+Opcionalmente, instale também as dependências de desenvolvimento para rodar os testes automatizados:
 
-Com tudo rodando, cada jogador abre `http://localhost:5371` em uma aba, entra na fila e cai na arena. No fim da partida a batalha manda o resultado para o gerenciador.
+```bash
+pip install -r src/requirements-dev.txt
+```
 
-**Sem o gerenciador:** na tela inicial, abra "Sem o gerenciador? Criar a partida direto na batalha", informe o adversário e abra o link dele em outra aba. Só os passos 1 e 2 são necessários. O resultado final não é registrado em lugar nenhum, porque não há gerenciador para recebê-lo.
+### 3. Configurar variáveis de ambiente (opcional)
 
-Variáveis de ambiente (todas opcionais):
+Nenhuma variável é obrigatória para rodar a demonstração local (com mão sorteada localmente e dica local). Caso deseje customizar URLs ou rodar em modo offline, copie o arquivo [`.env.example`](.env.example) para `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Conteúdo padrão do `.env.example`:
+
+```env
+PORT=3001
+GESTAO_API_URL=http://localhost:3000
+
+# Vazio = FonteCartasLocal (sorteia a mão neste serviço)
+DISTRIBUICAO_API_URL=
+
+# Serviço de dicas (.NET). Sem token = DicaLocal
+RECOMENDACAO_API_URL=http://localhost:5242
+RECOMENDACAO_TOKEN=
+
+# 1 = não acessa a PokéAPI (catálogo fixo ProvedorFake)
+BATALHA_OFFLINE=
+```
 
 | Variável | Para que serve | Padrão |
 | :--- | :--- | :--- |
-| `PORT` | Porta da API | `3001` |
-| `GESTAO_API_URL` | gerenciador-de-partidas | `http://localhost:3000` |
-| `DISTRIBUICAO_API_URL` | Distribuicao_de_Cartas. Vazio = mão sorteada localmente | vazio |
-| `RECOMENDACAO_API_URL` / `RECOMENDACAO_TOKEN` | Recomendacao-de-cartas. Sem token = dica calculada localmente | `http://localhost:5242` / vazio |
-| `BATALHA_OFFLINE=1` | Não acessa a PokéAPI (usa um catálogo fixo de 12 Pokémon) | desligado |
+| `PORT` | Porta da API de Batalha | `3001` |
+| `GESTAO_API_URL` | URL do `gerenciador-de-partidas` | `http://localhost:3000` |
+| `DISTRIBUICAO_API_URL` | URL do `Distribuicao_de_Cartas` (vazio = mão sorteada localmente) | vazio |
+| `RECOMENDACAO_API_URL` / `RECOMENDACAO_TOKEN` | URL e token Bearer do `Recomendacao-de-cartas` (sem token = dica calculada localmente) | `http://localhost:5242` / vazio |
+| `BATALHA_OFFLINE` | Se `1`, não acessa a PokéAPI e usa um catálogo fixo de 12 Pokémon | desligado |
 
-Testes (rodam sem internet):
+> **Nota:** o `S03_Batalha` lê as variáveis diretamente do ambiente do sistema (`os.getenv`). Se você criou um arquivo `.env`, carregue-o no terminal antes de subir a API:
+> ```bash
+> # Linux / macOS
+> set -a && source .env && set +a
+> ```
+> Ou informe a variável diretamente ao iniciar o servidor (ex.: `BATALHA_OFFLINE=1 python app.py`).
+
+#### Alternando entre Modo Independente/Offline e Integração Real
+
+- **Modo Independente (sem serviços parceiros):**
+  Deixe `DISTRIBUICAO_API_URL` e `RECOMENDACAO_TOKEN` vazios. O serviço sorteia as cartas localmente, calcula dicas localmente e permite criar partidas diretamente pela interface web sem precisar do `gerenciador-de-partidas`. Se também estiver sem internet, defina `BATALHA_OFFLINE=1` para usar o catálogo fixo (`ProvedorFake`) no lugar da PokéAPI.
+- **Modo Integração Real (com `gerenciador-de-partidas`):**
+  Suba o `gerenciador-de-partidas` na porta `3000` com `USE_MOCK_BATALHA=false` (veja o passo 6). Ao formar um par na fila, o gerenciador envia `POST /batalhas` para este serviço e recebe automaticamente o resultado final ao término da partida.
+
+### 4. Iniciar o backend da Batalha (porta `3001`)
+
+Com o ambiente virtual ativo:
+
+```bash
+cd src
+python app.py
+```
+
+O servidor estará disponível em `http://localhost:3001`.
+
+#### Documentação Interativa (Swagger UI)
+
+Com o backend rodando, acesse no navegador:
+
+- **Swagger UI:** `http://localhost:3001/docs`
+- **ReDoc:** `http://localhost:3001/redoc`
+
+### 5. Iniciar as telas / frontend (porta `5371`)
+
+Em **outro terminal**, sirva os arquivos estáticos da interface:
+
+```bash
+cd src/components
+python3 -m http.server 5371
+```
+
+Abra `http://localhost:5371` no navegador.
+
+### 6. Executar o fluxo completo com o Gestão de Partidas (porta `3000`)
+
+Para jogar usando a fila de matchmaking e registrar histórico/pontuação no banco de dados, execute também o repositório parceiro **`gerenciador-de-partidas`** em um terceiro terminal:
+
+1. Clone ou acesse o repositório `gerenciador-de-partidas`:
+   ```bash
+   git clone https://github.com/S03-2026-2/gerenciador-de-partidas.git
+   cd gerenciador-de-partidas
+   ```
+2. Copie o `.env.example` para `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+3. **Ajuste obrigatório no `.env` do `gerenciador-de-partidas`:**
+   ```env
+   USE_MOCK_BATALHA=false
+   ```
+   > **Atenção:** no `.env.example` do gerenciador, o valor padrão é `USE_MOCK_BATALHA=true`. Com `true`, o gerenciador simula a batalha sozinho, nunca chama o `S03_Batalha` e a tela da arena ficará parada em *"Aguardando o gerenciador enviar a partida para a batalha…"*. Sempre reinicie o `npm run dev` após editar o `.env`. Os demais valores padrão já apontam corretamente para este serviço (`BATALHA_API_URL="http://localhost:3001"` e `CALLBACK_RESULTADO_URL="http://localhost:3000/partidas/resultado"`).
+4. Suba o PostgreSQL, instale dependências, rode as migrations e inicie o servidor:
+   ```bash
+   docker compose up -d                    # ou: docker-compose up -d
+   npm install
+   npx prisma migrate dev --name init
+   npx prisma generate
+   npm run dev
+   ```
+
+Com os **3 terminais rodando** (Gestão na `3000`, Batalha na `3001` e Telas na `5371`), abra `http://localhost:5371` em **duas abas diferentes** (um jogador em cada aba), informe IDs diferentes, clique em **Buscar adversário** e ambos serão direcionados para a arena. Ao fim da partida, o `S03_Batalha` envia o resultado automaticamente para o gerenciador.
+
+#### Executando sem o Gestão de Partidas
+
+Se quiser testar apenas a batalha sem subir o `gerenciador-de-partidas` (apenas passos 4 e 5 rodando):
+
+1. Acesse `http://localhost:5371`.
+2. Informe seu ID de jogador no campo superior.
+3. Expanda a opção **"Sem o gerenciador? Criar a partida direto na batalha"**.
+4. Informe o ID do adversário e clique em **Criar partida local**.
+5. Abra o link gerado para o adversário em outra aba e jogue normalmente. *(Nesse modo, o resultado final não é persistido em banco, pois não há gerenciador para recebê-lo.)*
+
+### 7. Executar os testes automatizados
+
+Os testes rodam totalmente offline (sem acesso à internet ou serviços externos):
 
 ```bash
 cd src
 python -m pytest
 ```
 
-### Endpoints
+---
+
+## 🔌 Endpoints e Exemplos de Uso (`curl`)
 
 | Método | Rota | Uso |
 | :--- | :--- | :--- |
 | `POST` | `/batalhas` | Gestão de Partidas inicia a batalha (`idPartida`, `idJogador1`, `idJogador2`, `callbackUrl`) |
-| `POST` | `/batalhas/solicitar` | Jogador pede para entrar na fila |
-| `GET` | `/batalhas/{idPartida}?jogador={id}` | Estado da partida do ponto de vista do jogador |
-| `GET` | `/batalhas/{idPartida}/cartas/{idCarta}` | Analisar carta |
-| `POST` | `/batalhas/{idPartida}/jogadas` | Jogar (`idJogador`, `idCarta`, `nomeMovimento`) |
-| `POST` | `/batalhas/{idPartida}/dica` | Pedir dica (`idJogador`) |
+| `POST` | `/batalhas/solicitar` | Jogador pede para entrar na fila via fachada da Batalha |
+| `GET` | `/batalhas/{idPartida}?jogador={id}` | Consulta o estado da partida do ponto de vista de um jogador |
+| `GET` | `/batalhas/{idPartida}/cartas/{idCarta}` | Analisa os atributos e movimentos de uma carta |
+| `POST` | `/batalhas/{idPartida}/jogadas` | Registra a jogada da rodada (`idJogador`, `idCarta`, `nomeMovimento`) |
+| `POST` | `/batalhas/{idPartida}/dica` | Solicita uma dica de jogada (`idJogador`) |
 
-A documentação interativa fica em `http://localhost:3001/docs`.
+### 1. Iniciar uma batalha (`POST /batalhas`)
+
+```bash
+curl -X POST http://localhost:3001/batalhas \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idPartida": "partida-1",
+    "idJogador1": "jogador-1",
+    "idJogador2": "jogador-2",
+    "callbackUrl": "http://localhost:3000/partidas/resultado"
+  }'
+```
+
+**Resposta (`201 Created`):**
+```json
+{
+  "idPartida": "partida-1",
+  "status": "PREPARANDO",
+  "turno": 1,
+  "terminou": false,
+  "idJogador1": "jogador-1",
+  "idJogador2": "jogador-2",
+  "jogadorDaVez": null,
+  "placar": { "jogador-1": 0, "jogador-2": 0 },
+  "cartaEmCampo": { "jogador-1": null, "jogador-2": null },
+  "rodadas": []
+}
+```
+
+### 2. Consultar estado da partida (`GET /batalhas/{idPartida}?jogador={id}`)
+
+```bash
+curl "http://localhost:3001/batalhas/partida-1?jogador=jogador-1"
+```
+
+Retorna turno atual, `status` (`PREPARANDO`, `EM_ANDAMENTO`, `FINALIZADA` ou `ERRO`), placar, histórico de rodadas e os objetos `voce`, `adversario` e `suaVez` com as cartas disponíveis em mão.
+
+### 3. Analisar uma carta (`GET /batalhas/{idPartida}/cartas/{idCarta}`)
+
+```bash
+curl http://localhost:3001/batalhas/partida-1/cartas/carta-1
+```
+
+**Resposta (`200 OK`):**
+```json
+{
+  "id": "carta-1",
+  "pokemon": {
+    "id": 6,
+    "nome": "charizard",
+    "tipos": ["fire", "flying"],
+    "velocidade": 100,
+    "sprite": "https://...",
+    "movimentos": [
+      { "nome": "flamethrower", "tipo": "fire", "danoBase": 90 },
+      { "nome": "slash", "tipo": "normal", "danoBase": 70 }
+    ]
+  }
+}
+```
+
+### 4. Solicitar dica de jogada (`POST /batalhas/{idPartida}/dica`)
+
+```bash
+curl -X POST http://localhost:3001/batalhas/partida-1/dica \
+  -H "Content-Type: application/json" \
+  -d '{"idJogador": "jogador-1"}'
+```
+
+**Resposta (`200 OK`):**
+```json
+{
+  "dica": "..."
+}
+```
+
+### 5. Registrar jogada na rodada (`POST /batalhas/{idPartida}/jogadas`)
+
+```bash
+curl -X POST http://localhost:3001/batalhas/partida-1/jogadas \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idJogador": "jogador-1",
+    "idCarta": "carta-1",
+    "nomeMovimento": "flamethrower"
+  }'
+```
+
+*(Quando o Pokémon do jogador venceu a rodada anterior e permanece em campo, `idCarta` pode ser omitido.)*
+
+**Resposta (`200 OK`):**
+```json
+{
+  "mensagem": "Jogada registrada. Aguardando o adversário.",
+  "resultadoRodada": null,
+  "estado": { "...": "..." }
+}
+```
+
+### 6. Solicitar entrada na fila via fachada (`POST /batalhas/solicitar`)
+
+```bash
+curl -X POST http://localhost:3001/batalhas/solicitar \
+  -H "Content-Type: application/json" \
+  -d '{"idJogador": "jogador-1"}'
+```
+
+**Resposta (`202 Accepted`):**
+```json
+{
+  "mensagem": "Solicitação de batalha enviada para a Gestão de Partidas."
+}
+```
