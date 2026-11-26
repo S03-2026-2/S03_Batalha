@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = ["requests", "fastapi", "pydantic", "uvicorn"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]
 
 [build-system]
 requires = ["setuptools"]
@@ -14,3 +14,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]

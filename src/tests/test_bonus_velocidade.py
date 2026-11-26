@@ -1,16 +1,19 @@
 import pytest
-from controllers.poke_api_provider import PokeApiProvider
+
 from services.bonus_velocidade import BonusVelocidade
-api_provider = PokeApiProvider()
+from tests.fakes import PROVEDOR
 
-def criar_dados(id1):
-    return api_provider.buscar(id1)
+bonus = BonusVelocidade()
+pikachu, squirtle = PROVEDOR.buscar("pikachu"), PROVEDOR.buscar("squirtle")
 
-def test_bonus_velocidade():
-    bonus = BonusVelocidade()
-    pokemon = criar_dados(25)
 
-    moves = pokemon.movimentos
-    dano = bonus.aplicar(moves[0], pokemon)
+def test_mais_rapido_ganha_15_por_cento():
+    assert bonus.aplicar(100, pikachu.movimentos[0], pikachu, squirtle) == pytest.approx(115)
 
-    assert dano == 9
+
+def test_mais_lento_nao_ganha_bonus():
+    assert bonus.aplicar(100, squirtle.movimentos[0], squirtle, pikachu) == 100
+
+
+def test_empate_de_velocidade_nao_ganha_bonus():
+    assert bonus.aplicar(100, pikachu.movimentos[0], pikachu, pikachu) == 100

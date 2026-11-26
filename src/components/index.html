@@ -36,6 +36,19 @@
 
     <p id="msg" class="msg" role="status" aria-live="polite"></p>
     <p id="nota" class="nota" hidden>Você continua na fila até alguém entrar. O gerenciador ainda não tem uma rota para sair dela.</p>
+
+    <details class="local">
+      <summary>Sem o gerenciador? Criar a partida direto na batalha</summary>
+      <form id="formLocal">
+        <label for="idAdvLocal">ID do adversário</label>
+        <div class="campo">
+          <input id="idAdvLocal" autocomplete="off" required>
+          <button type="submit">Criar partida local</button>
+        </div>
+      </form>
+      <p id="msgLocal" class="msg" role="status" aria-live="polite"></p>
+      <ul id="linksLocal" class="links-local"></ul>
+    </details>
   </main>
 
   <script src="config.js"></script>
@@ -131,6 +144,41 @@
         $("#nota").hidden = true;
         mostrar(erro.message, "erro");
         travar(false);
+      }
+    });
+
+    // Modo local: cria a partida direto no S03_Batalha (POST /batalhas), como o gerenciador faria.
+    $("#formLocal").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const eu = entrada.value.trim();
+      const adv = $("#idAdvLocal").value.trim();
+      const msgLocal = $("#msgLocal");
+      $("#linksLocal").replaceChildren();
+      if (!eu || eu === adv) {
+        msgLocal.textContent = "Preencha seu ID lá em cima e um adversário diferente.";
+        msgLocal.className = "msg erro";
+        return;
+      }
+      const idPartida = `local-${Date.now().toString(36)}`;
+      try {
+        const r = await chamarBatalha("/batalhas", postJson({ idPartida, idJogador1: eu, idJogador2: adv }));
+        if (!r.ok) throw new Error(r.corpo?.detail || r.corpo?.erro || "A batalha recusou a partida.");
+      } catch (erro) {
+        msgLocal.textContent = erro.message;
+        msgLocal.className = "msg erro";
+        return;
+      }
+      sessionStorage.setItem("jogador", eu);
+      msgLocal.className = "msg";
+      msgLocal.textContent = "Partida criada. Abra o link do adversário em outra aba (ou outro computador).";
+      for (const id of [eu, adv]) {
+        const a = document.createElement("a");
+        a.href = urlDaArena(idPartida, id);
+        a.textContent = id === eu ? `Entrar como ${id}` : `Abrir como ${id}`;
+        if (id !== eu) a.target = "_blank";
+        const li = document.createElement("li");
+        li.append(a);
+        $("#linksLocal").append(li);
       }
     });
   </script>

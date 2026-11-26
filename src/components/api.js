@@ -34,3 +34,26 @@ const adversarioDe = (partida, idJogador) =>
 
 const urlDaArena = (idPartida, idJogador) =>
   `batalha.html?partida=${encodeURIComponent(idPartida)}&jogador=${encodeURIComponent(idJogador)}`;
+
+// Chama o sistema de batalhas (S03_Batalha). Devolve { status, ok, corpo }.
+async function chamarBatalha(caminho, opcoes) {
+  let resposta;
+  try {
+    resposta = await fetch(BATALHA_URL + caminho, opcoes);
+  } catch {
+    throw new Error(`Sem resposta da batalha em ${BATALHA_URL}. Confira se ela está rodando (python app.py).`);
+  }
+  let corpo = null;
+  try {
+    corpo = await resposta.json();
+  } catch {
+    // resposta sem JSON
+  }
+  return { status: resposta.status, ok: resposta.ok, corpo };
+}
+
+const postJson = (corpo) => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(corpo),
+});

@@ -1,13 +1,13 @@
+from models.movimento import Movimento
 from models.pokemon import Pokemon
-from controllers.poke_api_provider import PokeApiProvider
+
 
 class Carta:
+    """Carta do jogador. É só dado: não faz chamadas HTTP (o sprite já vem no Pokemon)."""
 
-    def __init__(self, id: str, pokemon: Pokemon):
-        self._id = id
+    def __init__(self, id: str, pokemon: Pokemon) -> None:
+        self._id = str(id)
         self._pokemon = pokemon
-        provider = PokeApiProvider()
-        self._sprite = provider.buscar_sprite(pokemon.id)
 
     @property
     def id(self) -> str:
@@ -18,5 +18,11 @@ class Carta:
         return self._pokemon
 
     @property
-    def sprite(self) -> str:
-        return self._sprite
+    def sprite(self) -> str | None:
+        return self._pokemon.sprite
+
+    def obter_movimento(self, nome_movimento: str) -> Movimento | None:
+        return self._pokemon.movimento(nome_movimento)
+
+    def para_dict(self) -> dict:
+        return {"id": self._id, "pokemon": self._pokemon.para_dict()}

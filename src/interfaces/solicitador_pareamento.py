@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from models.jogador import Jogador
-
 
 class SolicitadorPareamento(ABC):
     @abstractmethod
