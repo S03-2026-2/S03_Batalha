@@ -113,6 +113,10 @@ body.arena {
 .slot-campo:empty::before { content: attr(data-vazio); font-size: 0.9rem; }
 .slot-campo .carta { font-size: max(0.8rem, calc(var(--wb) * 0.14)); cursor: pointer; }
 .slot-adv-campo { justify-self: start; border-color: var(--linha); }
+/* Colunas fixas: o campo não "pula" quando o painel de golpes some. */
+.painel { grid-column: 1; grid-row: 1; }
+#slotCarta { grid-column: 2; grid-row: 1; }
+.slot-adv-campo { grid-column: 3; grid-row: 1; }
 
 /* Movimentos */
 .painel { display: grid; gap: 0.6rem; justify-self: end; width: min(19rem, 100%); }
@@ -143,10 +147,27 @@ body.arena {
 .secundario:hover { color: var(--tinta); background: transparent; border-color: var(--tinta); }
 .secundario:hover { background: #fff; }
 
+/* Placar, avisos e histórico */
+.marcador { display: flex; align-items: baseline; gap: 0.75rem; }
+.marcador #rodada { color: var(--apagado); }
+.marcador strong { font-size: 1.6rem; letter-spacing: -0.02em; }
+.acoes { display: flex; gap: 0.5rem; }
+.acoes button { min-height: 2.4rem; padding: 0 1rem; }
+.faixa { padding: 0.6rem 1.25rem; border-bottom: 2px solid var(--tinta); background: #fff; }
+.faixa .dica { color: var(--acao-escura); font-weight: 600; }
+.faixa .dica:empty { display: none; }
+.mao-voce.travada .vaga { border-style: solid; border-color: transparent; }
+.golpe:disabled { opacity: 0.6; }
+.painel button[hidden] { display: none; }
+.historico { padding: 0.6rem 1.25rem 1.2rem; }
+.historico summary { font-weight: 700; cursor: pointer; }
+.historico ol { margin: 0.5rem 0 0; padding-left: 1.3rem; color: var(--apagado); }
+
 @media (prefers-reduced-motion: reduce) { .carta { transition: none; } }
 
 @media (max-width: 44rem) {
   .campo { grid-template-columns: 1fr; justify-items: center; padding-block: 1rem; }
   .painel, .slot-adv-campo { justify-self: center; }
+  .painel, #slotCarta, .slot-adv-campo { grid-column: auto; grid-row: auto; }
   .slot-adv-campo { display: none; }
 }

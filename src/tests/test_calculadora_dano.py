@@ -1,16 +1,32 @@
 import pytest
-from controllers.poke_api_provider import PokeApiProvider
+
+from interfaces.modificador_dano import ModificadorDano
+from models.movimento import Movimento
 from services.calculadora_dano import CalculadoraDano
-api_provider = PokeApiProvider()
+from services.juiz_rodada import JuizRodada
+from tests.fakes import PROVEDOR, GeradorFixo, calculadora
 
-def criar_dados(id1, id2):
-    return api_provider.buscar(id1), api_provider.buscar(id2)
+squirtle, charmander = PROVEDOR.buscar("squirtle"), PROVEDOR.buscar("charmander")
 
-def test_bonus_velocidade():
-    calculadora = CalculadoraDano()
-    p1, p2 = criar_dados(25, 6)
 
-    moves = p1.movimentos
-    dano = calculadora.calcular(moves[0], p1, p2)
+def test_exemplo_da_documentacao_rn04():
+    calc = calculadora()
+    s1 = calc.calcular(squirtle.movimento("water-gun"), squirtle, charmander)
+    s2 = calc.calcular(charmander.movimento("ember"), charmander, squirtle)
+    assert s1 == 80
+    assert s2 == pytest.approx(23)
+    assert JuizRodada(calc, GeradorFixo()).probabilidade(s1, s2) == pytest.approx(0.7767, abs=1e-4)
 
-    assert dano == 129
+
+def test_golpe_sem_poder_usa_dano_padrao():
+    sem_poder = Movimento("splash", "normal", None)
+    assert CalculadoraDano([]).calcular(sem_poder, squirtle, charmander) == 50
+
+
+def test_nova_regra_entra_sem_alterar_a_calculadora():
+    class Clima(ModificadorDano):  # OCP: regra nova é só uma classe nova
+        def aplicar(self, dano, movimento, atacante, defensor):
+            return dano * 1.5 if movimento.tipo == "fire" else dano
+
+    calc = CalculadoraDano([Clima()])
+    assert calc.calcular(charmander.movimento("ember"), charmander, squirtle) == 60

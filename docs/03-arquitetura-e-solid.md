@@ -38,11 +38,11 @@ classDiagram
 
     class AcoesJogador {
         <<interface>>
-        +solicitarBatalha(idJogador: string) Promise~void~
-        +escolherCarta(idPartida: string, idJogador: string, idCarta: string) Promise~void~
-        +analisarCarta(idPartida: string, idCarta: string) Promise~Pokemon~
-        +escolherMovimento(idPartida: string, idJogador: string, nomeMovimento: string) Promise~ResultadoRodada | null~
-        +solicitarDica(idPartida: string, idJogador: string) Promise~string~
+        +solicitarBatalha(idJogador: string) void
+        +analisarCarta(idPartida: string, idCarta: string) Carta
+        +jogar(idPartida: string, idJogador: string, idCarta: string, nomeMovimento: string) ResultadoRodada | null
+        +solicitarDica(idPartida: string, idJogador: string) string
+        +partida(idPartida: string) Partida
     }
 
     %% ==========================================

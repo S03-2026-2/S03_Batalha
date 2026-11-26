@@ -16,8 +16,20 @@
 
     <header class="topo">
       <div class="ids"><span id="idVoce">—</span> × <span id="idAdv">…</span></div>
-      <a id="nova" class="botao" href="index.html" hidden>Nova batalha</a>
+      <div class="marcador">
+        <span id="rodada">Rodada —</span>
+        <strong id="placar">0 × 0</strong>
+      </div>
+      <div class="acoes">
+        <button class="secundario" id="pedirDica" type="button" disabled>Pedir dica</button>
+        <a id="nova" class="botao" href="index.html" hidden>Nova batalha</a>
+      </div>
     </header>
+
+    <div class="faixa">
+      <p class="msg" id="status" role="status" aria-live="polite">Conectando à batalha…</p>
+      <p class="msg dica" id="dica" aria-live="polite"></p>
+    </div>
 
     <section class="mao mao-adv" id="maoAdv" aria-label="Cartas do adversário"></section>
 
@@ -29,18 +41,20 @@
         <button class="secundario" id="devolver" type="button">Devolver à mão</button>
       </div>
       <div class="slot-campo" id="slotCarta" data-vazio="Clique em uma das suas cartas"></div>
-      <div class="slot-campo slot-adv-campo" data-vazio="O adversário ainda não jogou"></div>
+      <div class="slot-campo slot-adv-campo" id="slotAdv" data-vazio="O adversário ainda não jogou"></div>
     </section>
 
     <section class="mao mao-voce" id="maoVoce" aria-label="Suas cartas"></section>
+
+    <details class="historico" id="historico" hidden>
+      <summary>Rodadas</summary>
+      <ol id="listaRodadas"></ol>
+    </details>
   </main>
 
   <script src="config.js"></script>
   <script src="api.js"></script>
   <script>
-
-
-
     const $ = (seletor) => document.querySelector(seletor);
     const params = new URLSearchParams(location.search);
     const idPartida = params.get("partida");
@@ -60,103 +74,48 @@
     };
     const nomeTipo = (t) => TIPOS[t]?.[0] ?? t;
     const corTipo = (t) => TIPOS[t]?.[1] ?? "#999999";
-    const bonito = (texto) => texto.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+    const bonito = (texto) => String(texto).replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
 
-    // ---- Mãos ------------------------------------------------------------
-    function hash(texto) {
-      let h = 1779033703 ^ texto.length;
-      for (let i = 0; i < texto.length; i++) {
-        h = Math.imul(h ^ texto.charCodeAt(i), 3432918353);
-        h = (h << 13) | (h >>> 19);
-      }
-      return h >>> 0;
-    }
-    function sorteador(semente) {
-      let a = semente;
-      return () => {
-        a = (a + 0x6d2b79f5) | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-      };
-    }
-    function maoDoJogador(id) {
-      const r = sorteador(hash(`${idPartida}|${id}`));
-      const ids = new Set();
-      while (ids.size < 5) ids.add(1 + Math.floor(r() * 151));
-      return [...ids];
-    }
-
-    // ---- PokéAPI ---------------------------------------------------------
-    const cache = new Map();
-    function pokemon(id) {
-      if (!cache.has(id)) {
-        cache.set(id, fetch(`https://pokeapi.co/api/v2/pokemon/${id}`)
-          .then((r) => { if (!r.ok) throw new Error("PokéAPI indisponível"); return r.json(); })
-          .then((d) => ({
-            id: d.id,
-            nome: d.name,
-            tipos: d.types.map((t) => t.type.name),
-            velocidade: d.stats.find((s) => s.stat.name === "speed").base_stat,
-            imagem: d.sprites.other["official-artwork"].front_default || d.sprites.front_default,
-            urlsGolpes: d.moves.map((m) => m.move.url),
-          }))
-          .catch((e) => { cache.delete(id); throw e; }));
-      }
-      return cache.get(id);
-    }
-
-    // 4 golpes com dano, sempre os mesmos para o mesmo pokémon.
-    async function golpesDe(p) {
-      if (p.golpes) return p.golpes;
-      const r = sorteador(p.id);
-      const urls = [...p.urlsGolpes];
-      for (let i = urls.length - 1; i > 0; i--) {
-        const j = Math.floor(r() * (i + 1));
-        [urls[i], urls[j]] = [urls[j], urls[i]];
-      }
-      const detalhes = await Promise.all(
-        urls.slice(0, 12).map((u) => fetch(u).then((x) => x.json()).catch(() => null))
-      );
-      p.golpes = detalhes
-        .filter((d) => d && d.power)
-        .slice(0, 4)
-        .map((d) => ({ nome: d.name, tipo: d.type.name, dano: d.power }));
-      return p.golpes;
-    }
+    // Estado vindo do backend (GET /batalhas/{id}?jogador=...) e o que o jogador está montando na tela.
+    let estado = null;
+    let escolhida = null;   // { carta, vaga, c } carta clicada, ainda não enviada
+    let enviando = false;
 
     // ---- Cartas ----------------------------------------------------------
-    function criarCarta(p, minha) {
-      const carta = document.createElement(minha ? "button" : "div");
-      carta.className = minha ? "carta minha" : "carta";
-      if (minha) carta.type = "button";
+    // c = { id, pokemon: { id, nome, tipos, velocidade, sprite, movimentos } } (formato do backend)
+    function criarCarta(c, clicavel) {
+      const p = c.pokemon;
+      const carta = document.createElement(clicavel ? "button" : "div");
+      carta.className = clicavel ? "carta minha" : "carta";
+      if (clicavel) carta.type = "button";
+      carta.dataset.id = c.id;
       carta.style.setProperty("--tipo", corTipo(p.tipos[0]));
       carta.innerHTML = `
         <span class="topo-carta"><span>${bonito(p.nome)}</span><span class="num">#${p.id}</span></span>
-        <img src="${p.imagem}" alt="${bonito(p.nome)}">
+        <img src="${p.sprite ?? ""}" alt="${bonito(p.nome)}">
         <span class="tipos">${p.tipos.map((t) => `<span class="tipo" style="--tipo:${corTipo(t)}">${nomeTipo(t)}</span>`).join("")}</span>
         <span class="vel">Velocidade ${p.velocidade}</span>`;
       return carta;
     }
 
-    function desenharMao(container, pokemons, minha) {
+    function desenharMao(container, cartas, clicavel) {
       container.replaceChildren();
-      for (const p of pokemons) {
+      for (const c of cartas) {
         const vaga = document.createElement("div");
         vaga.className = "vaga";
-        const carta = criarCarta(p, minha);
+        const carta = criarCarta(c, clicavel);
         vaga.append(carta);
         container.append(vaga);
-        if (minha) carta.addEventListener("click", () => clicarNaCarta(carta, vaga, p));
+        if (clicavel) carta.addEventListener("click", () => clicarNaCarta(carta, vaga, c));
       }
     }
 
     // Move a carta para outro lugar com uma animação do ponto antigo ao novo.
-    function mover(carta, destino) {
+    function mover(carta, destino, animar = true) {
       const antes = carta.getBoundingClientRect();
       destino.append(carta);
+      if (!animar || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const depois = carta.getBoundingClientRect();
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       carta.animate(
         [{ transform: `translate(${antes.left - depois.left}px, ${antes.top - depois.top}px)` }, { transform: "none" }],
         { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" }
@@ -164,14 +123,13 @@
     }
 
     // ---- Escolha de carta e movimento -----------------------------------
-    let escolhida = null; // { carta, vaga, p }
-
-    function clicarNaCarta(carta, vaga, p) {
+    function clicarNaCarta(carta, vaga, c, animar = true) {
+      if (!estado?.suaVez || estado.voce.cartaEmCampo) return;
       if (escolhida?.carta === carta) return devolver();
       devolver();
-      mover(carta, $("#slotCarta"));
-      escolhida = { carta, vaga, p };
-      mostrarGolpes(p);
+      mover(carta, $("#slotCarta"), animar);
+      escolhida = { carta, vaga, c };
+      mostrarGolpes(c, true);
     }
 
     function devolver() {
@@ -182,104 +140,186 @@
     }
     $("#devolver").addEventListener("click", devolver);
 
-    async function mostrarGolpes(p) {
+    function mostrarGolpes(c, podeDevolver) {
       $("#painel").hidden = false;
-      $("#painelTitulo").textContent = `Movimentos de ${bonito(p.nome)}`;
+      $("#devolver").hidden = !podeDevolver;
+      $("#painelTitulo").textContent = `Movimentos de ${bonito(c.pokemon.nome)}`;
       $("#jogada").textContent = "";
-      $("#golpes").textContent = "Carregando movimentos…";
-
-      let golpes;
-      try {
-        golpes = await golpesDe(p);
-      } catch {
-        golpes = [];
-      }
-      if (escolhida?.p !== p) return; // o jogador trocou de carta enquanto carregava
-
       $("#golpes").replaceChildren();
-      if (!golpes.length) {
-        $("#golpes").textContent = "Não foi possível carregar os movimentos.";
-        return;
-      }
-      for (const g of golpes) {
+      for (const g of c.pokemon.movimentos) {
         const botao = document.createElement("button");
         botao.type = "button";
         botao.className = "golpe";
         botao.style.setProperty("--tipo", corTipo(g.tipo));
         botao.setAttribute("aria-pressed", "false");
-        botao.innerHTML = `<span>${bonito(g.nome)}</span><span class="info">${nomeTipo(g.tipo)}, dano ${g.dano}</span>`;
-        botao.addEventListener("click", () => escolherGolpe(botao, p, g));
+        botao.innerHTML = `<span>${bonito(g.nome)}</span><span class="info">${nomeTipo(g.tipo)}, dano ${g.danoBase ?? 50}</span>`;
+        botao.addEventListener("click", () => escolherGolpe(botao, c, g));
         $("#golpes").append(botao);
       }
     }
 
-    function escolherGolpe(botao, p, golpe) {
-      $("#golpes").querySelectorAll(".golpe").forEach((b) => b.setAttribute("aria-pressed", String(b === botao)));
-      $("#jogada").textContent = `Você escolheu ${bonito(golpe.nome)}. Aguardando o adversário.`;
-      // PRÓXIMA ETAPA: enviar a jogada ao sistema de batalhas, por exemplo
-      // POST {BATALHA_URL}/batalhas/{idPartida}/jogadas { idJogador, idCarta, nomeMovimento }
+    // Envia a jogada para o S03_Batalha: POST /batalhas/{idPartida}/jogadas
+    async function escolherGolpe(botao, c, golpe) {
+      if (enviando) return;
+      enviando = true;
+      $("#golpes").querySelectorAll(".golpe").forEach((b) => {
+        b.setAttribute("aria-pressed", String(b === botao));
+        b.disabled = true;
+      });
+      $("#jogada").textContent = `Enviando ${bonito(golpe.nome)}…`;
+      try {
+        const r = await chamarBatalha(
+          `/batalhas/${encodeURIComponent(idPartida)}/jogadas`,
+          postJson({ idJogador, idCarta: c.id, nomeMovimento: golpe.nome })
+        );
+        if (!r.ok) throw new Error(r.corpo?.erro || r.corpo?.detail || "A batalha recusou a jogada.");
+        escolhida = null;
+        desenhar(r.corpo.estado, true);
+      } catch (erro) {
+        $("#jogada").textContent = erro.message;
+        $("#golpes").querySelectorAll(".golpe").forEach((b) => { b.disabled = false; });
+      } finally {
+        enviando = false;
+      }
     }
 
-    // ---- Estado da partida (gerenciador) --------------------------------
-    async function carregarPartida() {
-      const partida = (await historico(idJogador)).find((p) => p.id === idPartida);
-      if (!partida) throw new Error("Esta partida não foi encontrada para este jogador.");
-      return partida;
+    // ---- Dica (Recomendação de Cartas ou dica local) ---------------------
+    $("#pedirDica").addEventListener("click", async () => {
+      $("#pedirDica").disabled = true;
+      $("#dica").textContent = "Pensando…";
+      try {
+        const r = await chamarBatalha(`/batalhas/${encodeURIComponent(idPartida)}/dica`, postJson({ idJogador }));
+        $("#dica").textContent = r.ok ? `Dica: ${r.corpo.dica}` : (r.corpo?.erro || "Dica indisponível.");
+      } catch (erro) {
+        $("#dica").textContent = erro.message;
+      } finally {
+        $("#pedirDica").disabled = !estado?.suaVez;
+      }
+    });
+
+    // ---- Desenho do estado ----------------------------------------------
+    function textoRodada(r) {
+      const [a, b] = r.jogadas;
+      const chance = Math.round(r.probabilidadeJogador1 * 100);
+      return `Rodada ${r.rodada}: ${bonito(a.pokemon)} (${bonito(a.movimento)}, força ${a.forca}) × ` +
+        `${bonito(b.pokemon)} (${bonito(b.movimento)}, força ${b.forca}). ` +
+        `Chance de ${a.idJogador}: ${chance}%, sorteio ${r.sorteio.toFixed(2)}. Venceu ${r.idVencedor}.`;
     }
 
-    function pontosDe(partida, id) {
-      return (partida.idJogador1 === id ? partida.pontuacaoJogador1 : partida.pontuacaoJogador2) ?? "—";
+    function mensagem(e) {
+      const adv = e.adversario.idJogador;
+      if (e.status === "FINALIZADA") {
+        const venceu = e.idVencedor === idJogador;
+        return `${venceu ? "Você venceu" : "Você perdeu"}: ${e.voce.pontos} × ${e.adversario.pontos}. ${e.detalhes}`;
+      }
+      if (e.suaVez && e.voce.cartaEmCampo) return "Seu Pokémon venceu e continua em campo. Escolha o movimento.";
+      if (e.suaVez) {
+        const primeiro = e.primeiroDaRodada === idJogador;
+        return primeiro ? "Sua vez: você escolhe primeiro nesta rodada." : `${adv} já escolheu. Sua vez.`;
+      }
+      if (e.voce.jaJogou) return `Jogada enviada. Aguardando ${adv}.`;
+      return `${adv} escolhe primeiro nesta rodada. Aguarde.`;
     }
 
-    function desenharStatus(partida) {
-      const status = $("#status");
-      if (partida.status === "AGUARDANDO_BATALHA") status.textContent = "Partida criada. Aguardando a batalha começar.";
-      else if (partida.status === "EM_BATALHA") status.textContent = "Batalha em andamento.";
-      else {
-        const venceu = partida.idVencedor === idJogador;
-        const adv = adversarioDe(partida, idJogador);
-        status.textContent = `${venceu ? "Você venceu" : "Você perdeu"}: ${pontosDe(partida, idJogador)} × ${pontosDe(partida, adv)}. ${partida.detalhes || ""}`;
+    function desenhar(e, forcar = false) {
+      if (!forcar && estado && estado.versao === e.versao && estado.status === e.status) return;
+      const anterior = estado;
+      estado = e;
+
+      const adv = e.idJogador1 === idJogador ? e.idJogador2 : e.idJogador1;
+      $("#idAdv").textContent = adv;
+      $("#rodada").textContent = e.terminou ? "Fim" : `Rodada ${e.turno} de 5`;
+      $("#placar").textContent = `${e.placar[idJogador] ?? 0} × ${e.placar[adv] ?? 0}`;
+
+      if (e.status === "PREPARANDO") {
+        $("#status").textContent = "Buscando as cartas dos jogadores…";
+        return;
+      }
+      if (e.status === "ERRO") {
+        $("#status").textContent = e.erro || "A batalha falhou.";
+        $("#status").className = "msg erro";
         $("#nova").hidden = false;
+        return;
       }
+
+      const v = e.voce;
+      const podeEscolherCarta = e.suaVez && !v.cartaEmCampo;
+      const idSelecionada = escolhida?.c.id;
+      escolhida = null;
+      $("#painel").hidden = true;
+
+      desenharMao($("#maoAdv"), e.adversario.mao, false);
+      desenharMao($("#maoVoce"), v.mao, podeEscolherCarta);
+      $("#maoVoce").classList.toggle("travada", !podeEscolherCarta);
+
+      // Campo do jogador: Pokémon que ficou em campo, ou a carta já enviada nesta rodada.
+      $("#slotCarta").replaceChildren();
+      const pendente = v.jogadaPendente;
+      const cartaPendente = pendente && !v.cartaEmCampo ? v.mao.find((c) => c.id === pendente.idCarta) : null;
+      if (v.cartaEmCampo) {
+        $("#slotCarta").append(criarCarta(v.cartaEmCampo, false));
+        if (e.suaVez) mostrarGolpes(v.cartaEmCampo, false);
+      } else if (cartaPendente) {
+        $("#maoVoce").querySelector(`[data-id="${CSS.escape(cartaPendente.id)}"]`)?.closest(".vaga")?.replaceChildren();
+        $("#slotCarta").append(criarCarta(cartaPendente, false));
+      }
+      $("#slotCarta").dataset.vazio = e.suaVez && !e.terminou ? "Clique em uma das suas cartas" : "";
+
+      // Campo do adversário.
+      $("#slotAdv").replaceChildren();
+      if (e.adversario.cartaEmCampo) $("#slotAdv").append(criarCarta(e.adversario.cartaEmCampo, false));
+      $("#slotAdv").dataset.vazio = e.terminou ? "" :
+        e.adversario.jaJogou ? "O adversário já escolheu" : "O adversário ainda não jogou";
+
+      // Se o jogador estava com uma carta escolhida (e o adversário só fez a parte dele), mantém a escolha.
+      if (podeEscolherCarta && idSelecionada) {
+        const botao = $("#maoVoce").querySelector(`[data-id="${CSS.escape(idSelecionada)}"]`);
+        const c = v.mao.find((x) => x.id === idSelecionada);
+        if (botao && c) clicarNaCarta(botao, botao.closest(".vaga"), c, false);
+      }
+
+      // Mensagens, histórico e fim de jogo.
+      $("#status").className = "msg";
+      const ultima = e.rodadas.at(-1);
+      const novaRodada = ultima && (!anterior || anterior.rodadas.length < e.rodadas.length);
+      $("#status").textContent = (novaRodada ? textoRodada(ultima) + " " : "") + mensagem(e);
+      $("#listaRodadas").replaceChildren(...e.rodadas.map((r) => {
+        const li = document.createElement("li");
+        li.textContent = textoRodada(r);
+        return li;
+      }));
+      $("#historico").hidden = e.rodadas.length === 0;
+      $("#pedirDica").disabled = !e.suaVez;
+      if (!e.suaVez) $("#dica").textContent = "";
+      $("#nova").hidden = !e.terminou;
     }
 
-    async function acompanhar(partida) {
+    // ---- Acompanhamento (consulta o backend a cada INTERVALO_MS) ---------
+    async function acompanhar() {
+      const inicio = Date.now();
       while (true) {
-        desenharStatus(partida);
-        if (partida.status === "FINALIZADA") return;
-        await esperar(INTERVALO_MS);
-        try { partida = await carregarPartida(); } catch { /* tenta de novo */ }
-      }
-    }
-
-    async function iniciar() {
-      let partida;
-      while (!partida) {
         try {
-          partida = await carregarPartida();
+          const r = await chamarBatalha(
+            `/batalhas/${encodeURIComponent(idPartida)}?jogador=${encodeURIComponent(idJogador)}`
+          );
+          if (r.status === 404) {
+            const s = Math.round((Date.now() - inicio) / 1000);
+            $("#status").textContent = `Aguardando o gerenciador enviar a partida para a batalha… (${s} s)` +
+              (s > 10 ? " Se o gerenciador estiver com USE_MOCK_BATALHA=true, ele não chama este serviço." : "");
+          } else if (r.ok) {
+            if (!enviando) desenhar(r.corpo);
+            if (r.corpo.terminou || r.corpo.status === "ERRO") return;
+          } else {
+            $("#status").textContent = r.corpo?.erro || "Erro ao consultar a batalha.";
+          }
         } catch (erro) {
           $("#status").textContent = erro.message;
-          await esperar(INTERVALO_MS);
         }
-      }
-
-      const idAdv = adversarioDe(partida, idJogador);
-      $("#idAdv").textContent = idAdv;
-      acompanhar(partida);
-
-      try {
-        const [minhas, deles] = await Promise.all([
-          Promise.all(maoDoJogador(idJogador).map(pokemon)),
-          Promise.all(maoDoJogador(idAdv).map(pokemon)),
-        ]);
-        desenharMao($("#maoAdv"), deles, false);
-        desenharMao($("#maoVoce"), minhas, true);
-      } catch {
-        $("#status").textContent = "Não foi possível carregar as cartas da PokéAPI. Confira sua conexão e recarregue a página.";
+        await esperar(INTERVALO_MS);
       }
     }
 
-    if (idPartida && idJogador) iniciar();
+    if (idPartida && idJogador) acompanhar();
   </script>
 </body>
 </html>

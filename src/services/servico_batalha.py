@@ -1,80 +1,136 @@
 import logging
 import threading
+from collections.abc import Callable
+
 from interfaces.acoes_jogador import AcoesJogador
+from interfaces.fonte_cartas import FonteCartas
 from interfaces.iniciador_partida import IniciadorPartida
-from models import partida
-from services.calculadora_dano import CalculadoraDano
+from interfaces.notificador_partidas import NotificadorPartidas
+from interfaces.provedor_dicas import ProvedorDicas
+from interfaces.repositorio_partidas import RepositorioPartidas
+from interfaces.solicitador_pareamento import SolicitadorPareamento
 from models.carta import Carta
-from models.jogada import Jogada
+from models.erros import JogadaInvalida, PartidaNaoEncontrada
 from models.jogador import Jogador
-from models.movimento import Movimento
-from models.partida import Partida
-from controllers.poke_api_provider import PokeApiProvider
-from controllers.cliente_dicas import ClienteDicas
-from controllers.cliente_distribuicao import ClienteDistribuicao
-from controllers.cliente_gestao import ClienteGestao
+from models.partida import Partida, StatusPartida
+from models.resultado_rodada import ResultadoRodada
+from services.juiz_rodada import JuizRodada
 
 log = logging.getLogger(__name__)
 
+Tarefa = Callable[[], None]
+
+
+def em_thread(tarefa: Tarefa) -> None:
+    threading.Thread(target=tarefa, daemon=True).start()
+
+
 class ServicoBatalha(IniciadorPartida, AcoesJogador):
-    def __init__(self) -> None:
-        self._pokemons = PokeApiProvider()
-        self._cartas = ClienteDistribuicao()
-        self._dicas = ClienteDicas()
-        self._gestao = ClienteGestao()
-        self._calculadora = CalculadoraDano()
-        self._lock = threading.Lock()
-        self._partidas: list[Partida] = None
+    """Fachada do módulo: orquestra os casos de uso UC01–UC08.
 
-    def solicitar_batalha(self, id_jogador: str) -> None:
-        self._gestao.solicitar_pareamento(id_jogador)
+    Recebe tudo pronto no construtor (DIP): só conhece interfaces e não sabe se do outro
+    lado está a API real, um fake de teste ou um fallback.
+    """
 
-    def iniciar_partida(
+    def __init__(
         self,
-        jogadores: list[Jogador],
-        id_partida: str | None = None,
-        callback_url: str | None = None,
-        ) -> None:
-        self._partida = Partida(jogadores, id_partida, callback_url)
-        if id_partida:
-            with self._lock:
-                if id_partida in self._partidas:
-                    return
-                self._partidas[id_partida] = self._partida
+        fonte_cartas: FonteCartas,
+        dicas: ProvedorDicas,
+        pareamento: SolicitadorPareamento,
+        notificador: NotificadorPartidas,
+        juiz: JuizRodada,
+        repositorio: RepositorioPartidas,
+        executar_em_segundo_plano: Callable[[Tarefa], None] = em_thread,
+    ) -> None:
+        self._cartas = fonte_cartas
+        self._dicas = dicas
+        self._pareamento = pareamento
+        self._notificador = notificador
+        self._juiz = juiz
+        self._repositorio = repositorio
+        self._segundo_plano = executar_em_segundo_plano
+        self._lock = threading.RLock()
 
+    # ---- UC01 -----------------------------------------------------------------
+    def solicitar_batalha(self, id_jogador: str) -> None:
+        self._pareamento.solicitar_pareamento(id_jogador)
+
+    # ---- UC02 + UC03 ------------------------------------------------------------
+    def iniciar_partida(self, id_partida: str, id_jogador1: str, id_jogador2: str,
+                        callback_url: str | None = None) -> Partida:
+        with self._lock:
+            existente = self._repositorio.buscar(id_partida)
+            if existente is not None:
+                return existente  # a Gestão pode reenviar; não duplicamos a partida
+            partida = Partida([Jogador(id_jogador1), Jogador(id_jogador2)], id_partida, callback_url)
+            self._repositorio.salvar(partida)
+
+        # Buscar cartas na PokéAPI demora; a Gestão recebe a resposta na hora.
+        self._segundo_plano(lambda: self._preparar(partida))
+        return partida
+
+    def _preparar(self, partida: Partida) -> None:
         try:
-            for j in jogadores:
-                cartas = self._cartas_jogador(j)
-                j.cartas = cartas
+            maos = {j.id: self._cartas.cartas_do_jogador(j.id, partida.id) for j in partida.jogadores}
+            with self._lock:
+                partida.iniciar(maos)
+            log.info("Partida %s pronta: %s x %s", partida.id, *[j.id for j in partida.jogadores])
+        except Exception as erro:
+            log.exception("Falha ao preparar a partida %s", partida.id)
+            with self._lock:
+                partida.falhar(f"Não foi possível carregar as cartas: {erro}")
 
-            self._executar_batalha()
-            self._gestao.notificar_resultado(self._partida)
-        except Exception as e:
-            log.exception("Falha na partida %s", id_partida)
+    # ---- consultas -------------------------------------------------------------
+    def partida(self, id_partida: str) -> Partida:
+        partida = self._repositorio.buscar(id_partida)
+        if partida is None:
+            raise PartidaNaoEncontrada(f"Partida {id_partida} não encontrada.")
+        return partida
 
-    def partida(self, id_partida: str) -> Partida | None:
-        return self._partidas.get(id_partida)
+    # ---- UC05 -----------------------------------------------------------------
+    def analisar_carta(self, id_partida: str, id_carta: str) -> Carta:
+        partida = self.partida(id_partida)
+        for jogador in partida.jogadores:
+            carta = jogador.selecionar_carta(id_carta)
+            if carta is not None:
+                return carta
+        raise JogadaInvalida("Carta não encontrada nesta partida.")
 
-    def _cartas_jogador(self, jogador: Jogador):
-        return self._cartas.cartas_do_jogador(jogador)
+    # ---- UC06 -----------------------------------------------------------------
+    def solicitar_dica(self, id_partida: str, id_jogador: str) -> str:
+        partida = self.partida(id_partida)
+        if partida.jogador(id_jogador) is None:
+            raise JogadaInvalida("Este jogador não pertence à partida.")
+        if partida.status != StatusPartida.EM_ANDAMENTO:
+            raise JogadaInvalida("A partida não está em andamento.")
+        return self._dicas.gerar_dica(partida, id_jogador)
 
-    def _executar_batalha(self) -> None:
-        pass
+    # ---- UC04 + UC07 -----------------------------------------------------------
+    def jogar(self, id_partida: str, id_jogador: str, id_carta: str | None,
+              nome_movimento: str) -> ResultadoRodada | None:
+        with self._lock:
+            partida = self.partida(id_partida)
+            partida.registrar_jogada(id_jogador, id_carta, nome_movimento)
+            if not partida.rodada_completa():
+                return None
+            resultado = self.processar_rodada(partida)
 
-    def escolher_carta(self, carta: Carta) -> None:
-        pass
+        if partida.terminou():
+            self._segundo_plano(lambda: self.verificar_vencedor(partida))
+        return resultado
 
-    def analisar_carta(self, carta: Carta) -> None:
-        pass
+    def processar_rodada(self, partida: Partida) -> ResultadoRodada:
+        jogada1, jogada2 = partida.jogadas_da_rodada()
+        resultado = self._juiz.resolver(partida.turno, jogada1, jogada2)
+        partida.registrar_vitoria(resultado)
+        log.info("Partida %s rodada %s: venceu %s", partida.id, resultado.numero, resultado.id_vencedor)
+        return resultado
 
-    def escolher_movimento(self, movimento: Movimento) -> None:
-        pass
-
-    def solicitar_dica(self) -> None:
-        pass
-
-    def processar_rodada(self, a: Jogada, b: Jogada) -> None:
-        pass
-
-    def verificar_vencedor(self) -> None:
-        pass
+    # ---- UC08 -----------------------------------------------------------------
+    def verificar_vencedor(self, partida: Partida) -> None:
+        try:
+            self._notificador.notificar_resultado(partida)
+            partida.notificacao = "ENVIADA"
+        except Exception as erro:
+            log.exception("Não foi possível notificar a Gestão sobre a partida %s", partida.id)
+            partida.notificacao = f"FALHOU: {erro}"

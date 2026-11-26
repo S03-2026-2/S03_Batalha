@@ -1,102 +1,115 @@
-from models.movimento import Movimento
-from models.pokemon import Pokemon
-from interfaces.provedor_pokemon import ProvedorPokemon
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 
-class PokeApiProvider(ProvedorPokemon):
+from interfaces.provedor_pokemon import ProvedorPokemon
+from models.movimento import Movimento
+from models.pokemon import Pokemon
 
-    def __init__(self) -> None:
-        self._cache_golpes: dict[str, dict] = {}
+log = logging.getLogger(__name__)
+
+URL_BASE = "https://pokeapi.co/api/v2"
+GOLPES_ANALISADOS = 25
+GOLPES_POR_POKEMON = 4
+GOLPE_RESERVA = Movimento("struggle", "normal", 50)
+
+
+class PokeApiProvider(ProvedorPokemon):
+    """Adapter: traduz o JSON da PokéAPI para o nosso modelo (Pokemon/Movimento)."""
+
+    # Golpes se repetem muito entre Pokémon: o cache é compartilhado por todas as instâncias.
+    _cache_golpes: dict[str, dict | None] = {}
+    _lock_cache = threading.Lock()
+
+    def __init__(self, url_base: str = URL_BASE, timeout: float = 10, sessao: requests.Session | None = None) -> None:
+        self._url_base = url_base.rstrip("/")
+        self._timeout = timeout
+        self._sessao = sessao or requests.Session()
 
     def buscar(self, identificador: str | int) -> Pokemon | None:
-        url = f"https://pokeapi.co/api/v2/pokemon/{str(identificador).lower().strip()}"
-        resposta = requests.get(url, timeout=10)
-
+        resposta = self._sessao.get(
+            f"{self._url_base}/pokemon/{str(identificador).lower().strip()}", timeout=self._timeout
+        )
         if resposta.status_code == 404:
-            print("Pokémon não encontrado.")
             return None
-
         resposta.raise_for_status()
         dados = resposta.json()
 
-        tipos = [t["type"]["name"] for t in dados["types"]]
-        speed = self._extrair_stat(dados["stats"])
-        movimentos = list(self._selecionar_moves(dados["moves"]))
+        return Pokemon(
+            id=dados["id"],
+            nome=dados["name"],
+            tipos=[t["type"]["name"] for t in dados["types"]],
+            velocidade=self._extrair_stat(dados["stats"], "speed"),
+            movimentos=self._selecionar_moves(dados["moves"]),
+            sprite=self._extrair_sprite(dados.get("sprites") or {}),
+        )
 
-        pokemon = Pokemon(dados["id"], dados["name"], tipos, speed, movimentos)
-
-        return pokemon
+    def buscar_sprite(self, identificador: str | int) -> str | None:
+        pokemon = self.buscar(identificador)
+        return pokemon.sprite if pokemon else None
 
     def _buscar_detalhes_golpe(self, url: str) -> dict | None:
-        if url in self._cache_golpes:
-            return self._cache_golpes[url]
-
-        resposta = requests.get(url, timeout=10)
-        if not resposta.ok:
+        with self._lock_cache:
+            if url in self._cache_golpes:
+                return self._cache_golpes[url]
+        try:
+            resposta = self._sessao.get(url, timeout=self._timeout)
+            if not resposta.ok:
+                return None
+            dados = resposta.json()
+            detalhes = {
+                "nome": dados["name"],
+                "tipo": dados["type"]["name"],
+                "categoria": (dados.get("damage_class") or {}).get("name"),
+                "poder": dados.get("power"),
+            }
+        except (requests.RequestException, KeyError, ValueError):
+            log.warning("Não foi possível ler o golpe %s", url)
             return None
-
-        dados = resposta.json()
-        detalhes = {
-            "nome": dados["name"],
-            "tipo": dados["type"]["name"],
-            "categoria": dados["damage_class"]["name"],
-            "poder": dados["power"]
-        }
-        self._cache_golpes[url] = detalhes
+        with self._lock_cache:
+            self._cache_golpes[url] = detalhes
         return detalhes
 
     def _selecionar_moves(self, moves_raw: list[dict]) -> list[Movimento]:
-        candidatos: list[dict] = []
-        for entrada in moves_raw[:25]:
-            url_golpe = entrada["move"]["url"]
+        """Até 4 golpes com dano, preferindo os mais fortes e de tipos diferentes.
 
-            detalhes = self._buscar_detalhes_golpe(url_golpe)
-            if not detalhes:
-                continue
+        Pokémon como Ditto ou Magikarp quase não têm golpe com dano: nesse caso
+        sobra o golpe reserva (struggle, 50), em vez de quebrar a partida.
+        """
+        urls = [m["move"]["url"] for m in moves_raw[:GOLPES_ANALISADOS]]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            detalhes = list(pool.map(self._buscar_detalhes_golpe, urls))
 
-            if detalhes["poder"] is None:
-                continue
-
-            candidatos.append({
-                **detalhes,
-                "pontuacao": detalhes["poder"],
-            })
-        candidatos.sort(key=lambda g: g["pontuacao"], reverse=True)
-
+        candidatos = sorted(
+            (d for d in detalhes if d and d["poder"]),
+            key=lambda d: d["poder"],
+            reverse=True,
+        )
         escolhidos: list[dict] = []
-        nomes_vistos: set[str] = set()
         tipos_vistos: set[str] = set()
-        for golpe in candidatos:
-            if golpe["nome"] not in nomes_vistos and golpe["tipo"] not in tipos_vistos:
+        for golpe in candidatos:  # primeiro: um golpe forte de cada tipo
+            if golpe["tipo"] not in tipos_vistos:
                 escolhidos.append(golpe)
-                nomes_vistos.add(golpe["nome"])
                 tipos_vistos.add(golpe["tipo"])
-            if len(escolhidos) == 4:
-                break
+        for golpe in candidatos:  # depois completa com os que sobraram
+            if golpe not in escolhidos:
+                escolhidos.append(golpe)
+        escolhidos = escolhidos[:GOLPES_POR_POKEMON]
 
-        m1 = Movimento(escolhidos[0]["nome"], escolhidos[0]["tipo"], escolhidos[0]["poder"])
-        m2 = Movimento(escolhidos[1]["nome"], escolhidos[1]["tipo"], escolhidos[1]["poder"])
-        m3 = Movimento(escolhidos[2]["nome"], escolhidos[2]["tipo"], escolhidos[2]["poder"])
-        m4 = Movimento(escolhidos[3]["nome"], escolhidos[3]["tipo"], escolhidos[3]["poder"])
+        if not escolhidos:
+            return [GOLPE_RESERVA]
+        return [Movimento(g["nome"], g["tipo"], g["poder"]) for g in escolhidos]
 
-        return [m1, m2, m3, m4]
-
-    def _extrair_stat(self, stats_raw: list[dict]) -> int | None:
+    @staticmethod
+    def _extrair_stat(stats_raw: list[dict], nome: str) -> int:
         for item in stats_raw:
-            if item["stat"]["name"] == "speed":
+            if item["stat"]["name"] == nome:
                 return item["base_stat"]
-        return None
+        return 0
 
-    def buscar_sprite(self, identificador: int | str) -> str | None:
-        url = f"https://pokeapi.co/api/v2/pokemon/{str(identificador).lower().strip()}"
-        resposta = requests.get(url, timeout=10)
-
-        if resposta.status_code == 404:
-            print("Pokémon não encontrado.")
-            return None
-
-        resposta.raise_for_status()
-        dados = resposta.json()
-
-        return dados["sprites"]["front_default"]
-
+    @staticmethod
+    def _extrair_sprite(sprites: dict) -> str | None:
+        arte = ((sprites.get("other") or {}).get("official-artwork") or {}).get("front_default")
+        return arte or sprites.get("front_default")

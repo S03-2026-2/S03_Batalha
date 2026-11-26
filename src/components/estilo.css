@@ -11,6 +11,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -118,3 +119,10 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .versus { grid-template-columns: 1fr; }
   .x { justify-self: center; }
 }
+
+/* Modo local (sem gerenciador) */
+.local { margin-top: 2.5rem; padding-top: 1rem; border-top: 2px dashed var(--linha); }
+.local summary { font-weight: 700; cursor: pointer; }
+.local form { margin: 1rem 0 0.5rem; }
+.links-local { margin: 0; padding-left: 1.2rem; }
+.links-local a { color: var(--acao); font-weight: 700; }
